@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, Clock } from 'lucide-react';
+import { Plus, Trash2, Clock, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface Task {
@@ -26,6 +26,13 @@ interface Task {
 
 interface Project { id: string; name: string; color: string; }
 
+type TaskForm = {
+  title: string; description: string; status: Task['status'];
+  priority: Task['priority']; due_date: string; project_id: string;
+};
+
+const emptyForm: TaskForm = { title: '', description: '', status: 'todo', priority: 'medium', due_date: '', project_id: '' };
+
 const priorityColors: Record<string, string> = {
   urgent: 'bg-destructive/20 text-destructive',
   high: 'bg-warning/20 text-warning',
@@ -33,17 +40,17 @@ const priorityColors: Record<string, string> = {
   low: 'bg-muted text-muted-foreground',
 };
 
+const statusLabels: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
+
 export default function Tasks() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState<string>('all');
-  const [form, setForm] = useState({
-    title: '', description: '', status: 'todo' as Task['status'],
-    priority: 'medium' as Task['priority'], due_date: '', project_id: '',
-  });
+  const [form, setForm] = useState<TaskForm>({ ...emptyForm });
 
   const fetchData = async () => {
     const [tasksRes, projectsRes] = await Promise.all([
@@ -57,18 +64,39 @@ export default function Tasks() {
 
   useEffect(() => { if (user) fetchData(); }, [user]);
 
+  const resetForm = () => { setForm({ ...emptyForm }); setEditingTask(null); };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('tasks').insert({
-      title: form.title, description: form.description || null,
-      status: form.status, priority: form.priority,
+    const payload = {
+      title: form.title,
+      description: form.description || null,
+      status: form.status,
+      priority: form.priority,
       due_date: form.due_date || null,
       project_id: form.project_id || null,
-      user_id: user!.id,
-    });
+    };
+    if (editingTask) {
+      await supabase.from('tasks').update(payload).eq('id', editingTask.id);
+    } else {
+      await supabase.from('tasks').insert({ ...payload, user_id: user!.id });
+    }
     setDialogOpen(false);
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', project_id: '' });
+    resetForm();
     fetchData();
+  };
+
+  const handleEdit = (task: Task) => {
+    setEditingTask(task);
+    setForm({
+      title: task.title,
+      description: task.description ?? '',
+      status: task.status,
+      priority: task.priority,
+      due_date: task.due_date ?? '',
+      project_id: task.project_id ?? '',
+    });
+    setDialogOpen(true);
   };
 
   const toggleDone = async (task: Task) => {
@@ -82,6 +110,11 @@ export default function Tasks() {
     fetchData();
   };
 
+  const updateStatus = async (taskId: string, status: Task['status']) => {
+    await supabase.from('tasks').update({ status }).eq('id', taskId);
+    fetchData();
+  };
+
   const filteredTasks = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter);
 
   const groupedByStatus = {
@@ -90,7 +123,7 @@ export default function Tasks() {
     done: filteredTasks.filter((t) => t.status === 'done'),
   };
 
-  const statusLabels: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
+  const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -99,12 +132,14 @@ export default function Tasks() {
           <h1 className="text-2xl font-semibold text-foreground">Tasks</h1>
           <p className="text-sm text-muted-foreground">{tasks.filter((t) => t.status !== 'done').length} open tasks</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" />New Task</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>New Task</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{editingTask ? 'Edit Task' : 'New Task'}</DialogTitle>
+            </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Title</Label>
@@ -156,7 +191,7 @@ export default function Tasks() {
                   </Select>
                 </div>
               </div>
-              <Button type="submit" className="w-full">Create Task</Button>
+              <Button type="submit" className="w-full">{editingTask ? 'Save Changes' : 'Create Task'}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -184,7 +219,7 @@ export default function Tasks() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {groupedByStatus[status].map((task) => (
-                  <div key={task.id} className="group flex items-start gap-3 rounded-md border border-border p-3">
+                  <div key={task.id} className="group flex items-start gap-3 rounded-md border border-border p-3 transition-colors hover:bg-muted/30">
                     <Checkbox
                       checked={task.status === 'done'}
                       onCheckedChange={() => toggleDone(task)}
@@ -194,8 +229,17 @@ export default function Tasks() {
                       <p className={`text-sm ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                         {task.title}
                       </p>
-                      <div className="mt-1 flex items-center gap-2">
+                      {task.description && (
+                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">{task.description}</p>
+                      )}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <Badge className={`text-xs ${priorityColors[task.priority]}`}>{task.priority}</Badge>
+                        {task.project_id && projectMap[task.project_id] && (
+                          <Badge variant="outline" className="text-xs">
+                            <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: projectMap[task.project_id].color }} />
+                            {projectMap[task.project_id].name}
+                          </Badge>
+                        )}
                         {task.due_date && (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
@@ -203,10 +247,26 @@ export default function Tasks() {
                           </span>
                         )}
                       </div>
+                      {/* Quick status change */}
+                      {task.status !== 'done' && (
+                        <div className="mt-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          {status !== 'todo' && (
+                            <button onClick={() => updateStatus(task.id, 'todo')} className="rounded bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-secondary/80">To Do</button>
+                          )}
+                          {status !== 'in_progress' && (
+                            <button onClick={() => updateStatus(task.id, 'in_progress')} className="rounded bg-primary/20 px-2 py-0.5 text-xs text-primary hover:bg-primary/30">In Progress</button>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(task.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(task)}>
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(task.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 {groupedByStatus[status].length === 0 && (
