@@ -12,6 +12,7 @@ import Tasks from "./pages/Tasks";
 import Notes from "./pages/Notes";
 import Bookmarks from "./pages/Bookmarks";
 import SettingsPage from "./pages/SettingsPage";
+import ProjectDetail from "./pages/ProjectDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
