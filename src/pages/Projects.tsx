@@ -34,7 +34,7 @@ export default function Projects() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [form, setForm] = useState({ name: '', description: '', status: 'active' as const, color: '#2D6A6A' });
+  const [form, setForm] = useState<{ name: string; description: string; status: Project['status']; color: string }>({ name: '', description: '', status: 'active', color: '#2D6A6A' });
 
   const fetchProjects = async () => {
     const { data } = await supabase.from('projects').select('*').order('updated_at', { ascending: false });
