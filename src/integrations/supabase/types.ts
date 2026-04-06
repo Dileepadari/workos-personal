@@ -47,6 +47,41 @@ export type Database = {
         }
         Relationships: []
       }
+      collaborator_sessions: {
+        Row: {
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          last_access_at: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          expires_at?: string
+          id?: string
+          last_access_at?: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          last_access_at?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborator_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_log: {
         Row: {
           blockers: string[] | null
@@ -469,7 +504,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_collab_project_data: { Args: { p_session_id: string }; Returns: Json }
+      verify_collab_password: {
+        Args: { p_email: string; p_password: string; p_project_slug: string }
+        Returns: Json
+      }
     }
     Enums: {
       project_status: "active" | "archived" | "on_hold"
