@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Trash2, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Note {
   id: string;
@@ -25,6 +27,7 @@ export default function Notes() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Note | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; noteId: string | null }>({ open: false, noteId: null });
   const [form, setForm] = useState({ title: '', content: '' });
 
   const fetchNotes = async () => {
@@ -55,17 +58,22 @@ export default function Notes() {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('notes').delete().eq('id', id);
+    setDeleteConfirm({ open: true, noteId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.noteId) return;
+    await supabase.from('notes').delete().eq('id', deleteConfirm.noteId);
+    setDeleteConfirm({ open: false, noteId: null });
     fetchNotes();
   };
 
   return (
     <div className="animate-fade-in space-y-6">
+      <PageHeader title="Notes" />
+
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Notes</h1>
-          <p className="text-sm text-muted-foreground">{notes.length} notes</p>
-        </div>
+        <p className="text-sm text-muted-foreground">{notes.length} notes</p>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setForm({ title: '', content: '' }); setEditing(null); } }}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" />New Note</Button>
@@ -117,6 +125,16 @@ export default function Notes() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Delete note?"
+        description="This action cannot be undone. The note will be permanently deleted."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

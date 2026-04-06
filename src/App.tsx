@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { SearchProvider } from "@/contexts/SearchContext";
 import { AppLayout } from "@/components/AppLayout";
 import { QuickSearch } from "@/components/QuickSearch";
 import Auth from "./pages/Auth";
@@ -49,7 +50,7 @@ function AppWithSearch() {
   }, []);
 
   return (
-    <>
+    <SearchProvider initialOpen={searchOpen} onSearchStateChange={setSearchOpen}>
       <QuickSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Routes>
         <Route path="/auth" element={<Auth />} />
@@ -71,7 +72,7 @@ function AppWithSearch() {
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </>
+    </SearchProvider>
   );
 }
 

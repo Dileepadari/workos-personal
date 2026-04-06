@@ -11,9 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, CheckSquare, FileText, Flag, LinkIcon, MessageSquare, Calendar, Users, Plus, Trash2, ExternalLink, Clock, Pin, Copy } from 'lucide-react';
+import { ArrowLeft, CheckSquare, FileText, Flag, LinkIcon, MessageSquare, Calendar, Users, Plus, Trash2, ExternalLink, Clock, Pin, Copy, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Project { id: string; name: string; description: string | null; status: string; color: string; slug: string | null; type: string; tags: string[]; start_date: string | null; target_end_date: string | null; repo_url: string | null; status_note: string | null; collab_password_hash: string | null; created_at: string; updated_at: string; }
 interface Task { id: string; title: string; status: string; priority: string; due_date: string | null; time_estimate_min: number | null; description: string | null; }
@@ -43,12 +45,25 @@ export default function ProjectDetail() {
 
   const [taskDialog, setTaskDialog] = useState(false);
   const [taskForm, setTaskForm] = useState({ title: '', priority: 'medium', due_date: '', time_estimate_min: '' });
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deleteTaskConfirm, setDeleteTaskConfirm] = useState<{ open: boolean; taskId: string | null }>({ open: false, taskId: null });
+  
   const [milestoneDialog, setMilestoneDialog] = useState(false);
   const [msForm, setMsForm] = useState({ title: '', date: '' });
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [deleteMilestoneConfirm, setDeleteMilestoneConfirm] = useState<{ open: boolean; msId: string | null }>({ open: false, msId: null });
+  
   const [resourceDialog, setResourceDialog] = useState(false);
   const [resForm, setResForm] = useState({ title: '', url: '', type: 'link' });
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [deleteResourceConfirm, setDeleteResourceConfirm] = useState<{ open: boolean; resId: string | null }>({ open: false, resId: null });
+  
   const [meetingDialog, setMeetingDialog] = useState(false);
   const [meetForm, setMeetForm] = useState({ title: '', scheduled_at: '', attendees: '', agenda: '' });
+  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
+  const [deleteMeetingConfirm, setDeleteMeetingConfirm] = useState<{ open: boolean; meetId: string | null }>({ open: false, meetId: null });
+  
+  const [deleteDiscussionConfirm, setDeleteDiscussionConfirm] = useState<{ open: boolean; discId: string | null }>({ open: false, discId: null });
   const [discussionText, setDiscussionText] = useState('');
   const [statusNote, setStatusNote] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -103,14 +118,68 @@ export default function ProjectDetail() {
 
   const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('tasks').insert({ title: taskForm.title, priority: taskForm.priority, due_date: taskForm.due_date || null, time_estimate_min: taskForm.time_estimate_min ? parseInt(taskForm.time_estimate_min) : null, project_id: project!.id, user_id: user!.id, status: 'todo' });
-    setTaskDialog(false); setTaskForm({ title: '', priority: 'medium', due_date: '', time_estimate_min: '' }); reload();
+    if (editingTask) {
+      await supabase.from('tasks').update({ title: taskForm.title, priority: taskForm.priority, due_date: taskForm.due_date || null, time_estimate_min: taskForm.time_estimate_min ? parseInt(taskForm.time_estimate_min) : null }).eq('id', editingTask.id);
+      toast({ title: 'Task updated' });
+    } else {
+      await supabase.from('tasks').insert({ title: taskForm.title, priority: taskForm.priority, due_date: taskForm.due_date || null, time_estimate_min: taskForm.time_estimate_min ? parseInt(taskForm.time_estimate_min) : null, project_id: project!.id, user_id: user!.id, status: 'todo' });
+      toast({ title: 'Task added' });
+    }
+    setTaskDialog(false); 
+    setTaskForm({ title: '', priority: 'medium', due_date: '', time_estimate_min: '' }); 
+    setEditingTask(null);
+    reload();
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setTaskForm({ title: task.title, priority: task.priority, due_date: task.due_date || '', time_estimate_min: task.time_estimate_min?.toString() || '' });
+    setTaskDialog(true);
+  };
+
+  const handleDeleteTask = (id: string) => {
+    setDeleteTaskConfirm({ open: true, taskId: id });
+  };
+
+  const confirmDeleteTask = async () => {
+    if (!deleteTaskConfirm.taskId) return;
+    await supabase.from('tasks').delete().eq('id', deleteTaskConfirm.taskId);
+    setDeleteTaskConfirm({ open: false, taskId: null });
+    toast({ title: 'Task deleted' });
+    reload();
   };
 
   const addMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('milestones').insert({ title: msForm.title, date: msForm.date, project_id: project!.id, user_id: user!.id });
-    setMilestoneDialog(false); setMsForm({ title: '', date: '' }); reload();
+    if (editingMilestone) {
+      await supabase.from('milestones').update({ title: msForm.title, date: msForm.date }).eq('id', editingMilestone.id);
+      toast({ title: 'Milestone updated' });
+    } else {
+      await supabase.from('milestones').insert({ title: msForm.title, date: msForm.date, project_id: project!.id, user_id: user!.id });
+      toast({ title: 'Milestone added' });
+    }
+    setMilestoneDialog(false); 
+    setMsForm({ title: '', date: '' }); 
+    setEditingMilestone(null);
+    reload();
+  };
+
+  const handleEditMilestone = (ms: Milestone) => {
+    setEditingMilestone(ms);
+    setMsForm({ title: ms.title, date: ms.date });
+    setMilestoneDialog(true);
+  };
+
+  const handleDeleteMilestone = (id: string) => {
+    setDeleteMilestoneConfirm({ open: true, msId: id });
+  };
+
+  const confirmDeleteMilestone = async () => {
+    if (!deleteMilestoneConfirm.msId) return;
+    await supabase.from('milestones').delete().eq('id', deleteMilestoneConfirm.msId);
+    setDeleteMilestoneConfirm({ open: false, msId: null });
+    toast({ title: 'Milestone deleted' });
+    reload();
   };
 
   const toggleMilestone = async (ms: Milestone) => {
@@ -120,14 +189,68 @@ export default function ProjectDetail() {
 
   const addResource = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('resources').insert({ title: resForm.title, url: resForm.url || null, type: resForm.type, project_id: project!.id, user_id: user!.id });
-    setResourceDialog(false); setResForm({ title: '', url: '', type: 'link' }); reload();
+    if (editingResource) {
+      await supabase.from('resources').update({ title: resForm.title, url: resForm.url || null, type: resForm.type }).eq('id', editingResource.id);
+      toast({ title: 'Resource updated' });
+    } else {
+      await supabase.from('resources').insert({ title: resForm.title, url: resForm.url || null, type: resForm.type, project_id: project!.id, user_id: user!.id });
+      toast({ title: 'Resource added' });
+    }
+    setResourceDialog(false); 
+    setResForm({ title: '', url: '', type: 'link' }); 
+    setEditingResource(null);
+    reload();
+  };
+
+  const handleEditResource = (res: Resource) => {
+    setEditingResource(res);
+    setResForm({ title: res.title, url: res.url || '', type: res.type });
+    setResourceDialog(true);
+  };
+
+  const handleDeleteResource = (id: string) => {
+    setDeleteResourceConfirm({ open: true, resId: id });
+  };
+
+  const confirmDeleteResource = async () => {
+    if (!deleteResourceConfirm.resId) return;
+    await supabase.from('resources').delete().eq('id', deleteResourceConfirm.resId);
+    setDeleteResourceConfirm({ open: false, resId: null });
+    toast({ title: 'Resource deleted' });
+    reload();
   };
 
   const addMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('meetings').insert({ title: meetForm.title, scheduled_at: meetForm.scheduled_at, attendees: meetForm.attendees || null, agenda_html: meetForm.agenda ? `<p>${meetForm.agenda}</p>` : null, project_id: project!.id, user_id: user!.id });
-    setMeetingDialog(false); setMeetForm({ title: '', scheduled_at: '', attendees: '', agenda: '' }); reload();
+    if (editingMeeting) {
+      await supabase.from('meetings').update({ title: meetForm.title, scheduled_at: meetForm.scheduled_at, attendees: meetForm.attendees || null, agenda_html: meetForm.agenda ? `<p>${meetForm.agenda}</p>` : null }).eq('id', editingMeeting.id);
+      toast({ title: 'Meeting updated' });
+    } else {
+      await supabase.from('meetings').insert({ title: meetForm.title, scheduled_at: meetForm.scheduled_at, attendees: meetForm.attendees || null, agenda_html: meetForm.agenda ? `<p>${meetForm.agenda}</p>` : null, project_id: project!.id, user_id: user!.id });
+      toast({ title: 'Meeting added' });
+    }
+    setMeetingDialog(false); 
+    setMeetForm({ title: '', scheduled_at: '', attendees: '', agenda: '' }); 
+    setEditingMeeting(null);
+    reload();
+  };
+
+  const handleEditMeeting = (meet: Meeting) => {
+    setEditingMeeting(meet);
+    setMeetForm({ title: meet.title, scheduled_at: meet.scheduled_at, attendees: meet.attendees || '', agenda: meet.agenda_html?.replace(/<[^>]*>/g, '') || '' });
+    setMeetingDialog(true);
+  };
+
+  const handleDeleteMeeting = (id: string) => {
+    setDeleteMeetingConfirm({ open: true, meetId: id });
+  };
+
+  const confirmDeleteMeeting = async () => {
+    if (!deleteMeetingConfirm.meetId) return;
+    await supabase.from('meetings').delete().eq('id', deleteMeetingConfirm.meetId);
+    setDeleteMeetingConfirm({ open: false, meetId: null });
+    toast({ title: 'Meeting deleted' });
+    reload();
   };
 
   const addDiscussion = async () => {
@@ -138,6 +261,18 @@ export default function ProjectDetail() {
 
   const togglePin = async (d: Discussion) => {
     await supabase.from('discussions').update({ is_pinned: !d.is_pinned }).eq('id', d.id);
+    reload();
+  };
+
+  const handleDeleteDiscussion = (id: string) => {
+    setDeleteDiscussionConfirm({ open: true, discId: id });
+  };
+
+  const confirmDeleteDiscussion = async () => {
+    if (!deleteDiscussionConfirm.discId) return;
+    await supabase.from('discussions').delete().eq('id', deleteDiscussionConfirm.discId);
+    setDeleteDiscussionConfirm({ open: false, discId: null });
+    toast({ title: 'Discussion deleted' });
     reload();
   };
 
@@ -239,7 +374,7 @@ export default function ProjectDetail() {
             <Dialog open={taskDialog} onOpenChange={setTaskDialog}>
               <DialogTrigger asChild><Button size="sm"><Plus className="mr-1 h-3.5 w-3.5" />Add Task</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Add Task</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingTask ? 'Edit Task' : 'Add Task'}</DialogTitle></DialogHeader>
                 <form onSubmit={addTask} className="space-y-4">
                   <div className="space-y-2"><Label>Title</Label><Input value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} required /></div>
                   <div className="grid grid-cols-3 gap-4">
@@ -247,7 +382,7 @@ export default function ProjectDetail() {
                     <div className="space-y-2"><Label>Due Date</Label><Input type="date" value={taskForm.due_date} onChange={e => setTaskForm({ ...taskForm, due_date: e.target.value })} /></div>
                     <div className="space-y-2"><Label>Est. (min)</Label><Input type="number" value={taskForm.time_estimate_min} onChange={e => setTaskForm({ ...taskForm, time_estimate_min: e.target.value })} /></div>
                   </div>
-                  <Button type="submit" className="w-full">Add Task</Button>
+                  <Button type="submit" className="w-full">{editingTask ? 'Update Task' : 'Add Task'}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -260,9 +395,13 @@ export default function ProjectDetail() {
                   <summary className="mb-2 cursor-pointer text-xs font-medium uppercase text-muted-foreground">Done ({statusTasks.length})</summary>
                   <div className="space-y-1">
                     {statusTasks.map(task => (
-                      <div key={task.id} className="flex items-center gap-2 sm:gap-3 rounded-md border border-border px-2 sm:px-3 py-2 transition-colors hover:bg-muted/30">
+                      <div key={task.id} className="flex items-center gap-2 sm:gap-3 rounded-md border border-border px-2 sm:px-3 py-2 transition-colors hover:bg-muted/30 group">
                         <Checkbox checked onCheckedChange={() => toggleTask(task)} />
                         <span className="flex-1 text-xs sm:text-sm text-muted-foreground line-through">{task.title}</span>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTask(task)}><Edit2 className="h-3 w-3" /></Button>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteTask(task.id)}><Trash2 className="h-3 w-3" /></Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -275,12 +414,16 @@ export default function ProjectDetail() {
                 <h3 className="mb-2 text-xs font-medium uppercase text-muted-foreground">{status === 'todo' ? 'To Do' : 'In Progress'} ({statusTasks.length})</h3>
                 <div className="space-y-1">
                   {statusTasks.map(task => (
-                    <div key={task.id} className="flex items-center gap-2 sm:gap-3 rounded-md border border-border px-2 sm:px-3 py-2.5 transition-colors hover:bg-muted/30">
+                    <div key={task.id} className="flex items-center gap-2 sm:gap-3 rounded-md border border-border px-2 sm:px-3 py-2.5 transition-colors hover:bg-muted/30 group">
                       <Checkbox checked={false} onCheckedChange={() => toggleTask(task)} />
                       <span className="flex-1 text-xs sm:text-sm text-foreground">{task.title}</span>
                       <Badge className={`text-[10px] sm:text-xs ${priorityColors[task.priority]}`}>{task.priority}</Badge>
                       {task.time_estimate_min && <span className="text-[10px] sm:text-xs text-muted-foreground hidden sm:inline">{task.time_estimate_min}m</span>}
                       {task.due_date && <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground"><Clock className="h-3 w-3" />{format(new Date(task.due_date), 'MMM d')}</span>}
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditTask(task)}><Edit2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteTask(task.id)}><Trash2 className="h-3 w-3" /></Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -295,11 +438,11 @@ export default function ProjectDetail() {
             <Dialog open={milestoneDialog} onOpenChange={setMilestoneDialog}>
               <DialogTrigger asChild><Button size="sm"><Plus className="mr-1 h-3.5 w-3.5" />Add Milestone</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Add Milestone</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingMilestone ? 'Edit Milestone' : 'Add Milestone'}</DialogTitle></DialogHeader>
                 <form onSubmit={addMilestone} className="space-y-4">
                   <div className="space-y-2"><Label>Title</Label><Input value={msForm.title} onChange={e => setMsForm({ ...msForm, title: e.target.value })} required /></div>
                   <div className="space-y-2"><Label>Date</Label><Input type="date" value={msForm.date} onChange={e => setMsForm({ ...msForm, date: e.target.value })} required /></div>
-                  <Button type="submit" className="w-full">Add Milestone</Button>
+                  <Button type="submit" className="w-full">{editingMilestone ? 'Update Milestone' : 'Add Milestone'}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -318,11 +461,15 @@ export default function ProjectDetail() {
             </Card>
           )}
           {milestones.map(ms => (
-            <div key={ms.id} className="flex items-center gap-2 sm:gap-3 rounded-md border border-border px-3 sm:px-4 py-3 transition-colors hover:bg-muted/30">
+            <div key={ms.id} className="flex items-center gap-2 sm:gap-3 rounded-md border border-border px-3 sm:px-4 py-3 transition-colors hover:bg-muted/30 group">
               <Checkbox checked={ms.is_completed} onCheckedChange={() => toggleMilestone(ms)} />
               <Flag className={`h-4 w-4 ${ms.is_completed ? 'text-success' : 'text-primary'}`} />
               <span className={`flex-1 text-xs sm:text-sm ${ms.is_completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{ms.title}</span>
               <span className="text-[10px] sm:text-xs text-muted-foreground">{format(new Date(ms.date), 'MMM d, yyyy')}</span>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditMilestone(ms)}><Edit2 className="h-3 w-3" /></Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteMilestone(ms.id)}><Trash2 className="h-3 w-3" /></Button>
+              </div>
             </div>
           ))}
           {milestones.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">No milestones yet</p>}
@@ -334,23 +481,27 @@ export default function ProjectDetail() {
             <Dialog open={resourceDialog} onOpenChange={setResourceDialog}>
               <DialogTrigger asChild><Button size="sm"><Plus className="mr-1 h-3.5 w-3.5" />Add Resource</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Add Resource</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingResource ? 'Edit Resource' : 'Add Resource'}</DialogTitle></DialogHeader>
                 <form onSubmit={addResource} className="space-y-4">
                   <div className="space-y-2"><Label>Title</Label><Input value={resForm.title} onChange={e => setResForm({ ...resForm, title: e.target.value })} required /></div>
                   <div className="space-y-2"><Label>URL</Label><Input value={resForm.url} onChange={e => setResForm({ ...resForm, url: e.target.value })} placeholder="https://" /></div>
                   <div className="space-y-2"><Label>Type</Label><Input value={resForm.type} onChange={e => setResForm({ ...resForm, type: e.target.value })} placeholder="link, pdf, doc, image, video, code, note" /></div>
-                  <Button type="submit" className="w-full">Add Resource</Button>
+                  <Button type="submit" className="w-full">{editingResource ? 'Update Resource' : 'Add Resource'}</Button>
                 </form>
               </DialogContent>
             </Dialog>
           </div>
           {resources.map(r => (
-            <Card key={r.id}>
+            <Card key={r.id} className="group">
               <CardContent className="flex items-center gap-3 sm:gap-4 p-3 sm:p-4">
                 <Badge variant="outline" className="text-[10px] sm:text-xs capitalize">{r.type}</Badge>
                 <span className="flex-1 text-xs sm:text-sm text-foreground truncate">{r.title}</span>
                 {r.tags?.length > 0 && r.tags.map(tag => <Badge key={tag} variant="secondary" className="text-[10px] hidden sm:inline-flex">{tag}</Badge>)}
                 {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="h-4 w-4 text-muted-foreground hover:text-primary" /></a>}
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditResource(r)}><Edit2 className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteResource(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -364,16 +515,19 @@ export default function ProjectDetail() {
             <Button onClick={addDiscussion} disabled={!discussionText.trim()} className="shrink-0">Post</Button>
           </div>
           {discussions.map(d => (
-            <Card key={d.id} className={d.is_pinned ? 'border-primary/30' : ''}>
+            <Card key={d.id} className={`${d.is_pinned ? 'border-primary/30' : ''} group`}>
               <CardContent className="p-3 sm:p-4">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   {d.is_pinned && <Pin className="h-3.5 w-3.5 text-primary" />}
                   <span className="text-xs font-medium text-foreground">{d.author}</span>
                   <Badge variant="outline" className="text-[10px] capitalize">{d.author_type}</Badge>
                   <span className="text-[10px] text-muted-foreground">{format(new Date(d.created_at), 'MMM d, h:mm a')}</span>
-                  <Button variant="ghost" size="sm" className="h-6 px-1.5 ml-auto" onClick={() => togglePin(d)}>
-                    <Pin className="h-3 w-3" />
-                  </Button>
+                  <div className="flex gap-1 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" className="h-6 px-1.5" onClick={() => togglePin(d)}>
+                      <Pin className="h-3 w-3" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteDiscussion(d.id)}><Trash2 className="h-3 w-3" /></Button>
+                  </div>
                 </div>
                 <div className="text-xs sm:text-sm text-foreground" dangerouslySetInnerHTML={{ __html: d.body_html }} />
               </CardContent>
@@ -388,13 +542,13 @@ export default function ProjectDetail() {
             <Dialog open={meetingDialog} onOpenChange={setMeetingDialog}>
               <DialogTrigger asChild><Button size="sm"><Plus className="mr-1 h-3.5 w-3.5" />Add Meeting</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Add Meeting</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editingMeeting ? 'Edit Meeting' : 'Add Meeting'}</DialogTitle></DialogHeader>
                 <form onSubmit={addMeeting} className="space-y-4">
                   <div className="space-y-2"><Label>Title</Label><Input value={meetForm.title} onChange={e => setMeetForm({ ...meetForm, title: e.target.value })} required /></div>
                   <div className="space-y-2"><Label>Date & Time</Label><Input type="datetime-local" value={meetForm.scheduled_at} onChange={e => setMeetForm({ ...meetForm, scheduled_at: e.target.value })} required /></div>
                   <div className="space-y-2"><Label>Attendees</Label><Input value={meetForm.attendees} onChange={e => setMeetForm({ ...meetForm, attendees: e.target.value })} placeholder="Names or emails" /></div>
                   <div className="space-y-2"><Label>Agenda</Label><Textarea value={meetForm.agenda} onChange={e => setMeetForm({ ...meetForm, agenda: e.target.value })} rows={3} /></div>
-                  <Button type="submit" className="w-full">Add Meeting</Button>
+                  <Button type="submit" className="w-full">{editingMeeting ? 'Update Meeting' : 'Add Meeting'}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -413,11 +567,17 @@ export default function ProjectDetail() {
           {meetings.map(m => {
             const isPast = new Date(m.scheduled_at) < new Date();
             return (
-              <Card key={m.id} className={isPast ? 'opacity-70' : ''}>
+              <Card key={m.id} className={`${isPast ? 'opacity-70' : ''} group`}>
                 <CardContent className="p-3 sm:p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs sm:text-sm font-medium text-foreground">{m.title}</h4>
-                    <span className="text-[10px] sm:text-xs text-muted-foreground">{format(new Date(m.scheduled_at), 'MMM d, h:mm a')}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] sm:text-xs text-muted-foreground">{format(new Date(m.scheduled_at), 'MMM d, h:mm a')}</span>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditMeeting(m)}><Edit2 className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => handleDeleteMeeting(m.id)}><Trash2 className="h-3 w-3" /></Button>
+                      </div>
+                    </div>
                   </div>
                   {m.attendees && <p className="text-[10px] sm:text-xs text-muted-foreground">With: {m.attendees}</p>}
                   {m.agenda_html && <div className="text-[10px] sm:text-xs text-muted-foreground" dangerouslySetInnerHTML={{ __html: m.agenda_html }} />}

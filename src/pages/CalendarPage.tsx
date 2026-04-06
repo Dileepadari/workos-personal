@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight, CheckSquare, Flag, Calendar as CalIcon, Video } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, isToday, addDays } from 'date-fns';
+import { PageHeader } from '@/components/PageHeader';
 
 interface CalEvent {
   id: string;
@@ -87,12 +88,11 @@ export default function CalendarPage() {
 
   return (
     <div className="animate-fade-in space-y-4">
+      <PageHeader title="Calendar" />
+
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Calendar</h1>
-          <p className="text-sm text-muted-foreground">{events.length} events</p>
-        </div>
+        <p className="text-sm text-muted-foreground">{events.length} events</p>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-border">
             {(['month', 'week', 'agenda'] as const).map(v => (

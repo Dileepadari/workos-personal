@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Tag, Sun, Moon, Shield, Database } from 'lucide-react';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -56,10 +57,7 @@ export default function SettingsPage() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Settings</h1>
-        <p className="text-xs sm:text-sm text-muted-foreground">Manage your workspace</p>
-      </div>
+      <PageHeader title="Settings" />
 
       {/* Account */}
       <Card>

@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { format, isToday, isBefore, startOfToday, addDays, isWithinInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/PageHeader';
 
 interface Task {
   id: string; title: string; status: string; priority: string;
@@ -137,13 +138,12 @@ export default function Dashboard() {
 
   return (
     <div className="animate-fade-in space-y-4 sm:space-y-6">
+      <PageHeader title="Dashboard" />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            {todayTasks.length} tasks today · {totalEstimateToday > 0 ? `${Math.floor(totalEstimateToday / 60)}h ${totalEstimateToday % 60}m estimated` : 'no estimates'}
-          </p>
-        </div>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          {todayTasks.length} tasks today · {totalEstimateToday > 0 ? `${Math.floor(totalEstimateToday / 60)}h ${totalEstimateToday % 60}m estimated` : 'no estimates'}
+        </p>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" asChild><Link to="/tasks"><CheckSquare className="mr-1 h-3.5 w-3.5" />Tasks</Link></Button>
           <Button size="sm" asChild><Link to="/projects"><Plus className="mr-1 h-3.5 w-3.5" />Project</Link></Button>

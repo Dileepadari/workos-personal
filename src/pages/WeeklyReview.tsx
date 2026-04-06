@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckSquare, Plus, Link2, Calendar, AlertTriangle, TrendingUp } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, addDays, isWithinInterval } from 'date-fns';
+import { PageHeader } from '@/components/PageHeader';
 
 export default function WeeklyReview() {
   const { user } = useAuth();
@@ -78,10 +79,9 @@ export default function WeeklyReview() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Weekly Review</h1>
-        <p className="text-sm text-muted-foreground">Week of {format(startOfWeek(new Date()), 'MMM d')} — {format(endOfWeek(new Date()), 'MMM d, yyyy')}</p>
-      </div>
+      <PageHeader title="Weekly Review" />
+
+      <p className="text-sm text-muted-foreground">Week of {format(startOfWeek(new Date()), 'MMM d')} — {format(endOfWeek(new Date()), 'MMM d, yyyy')}</p>
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

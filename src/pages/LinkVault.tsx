@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, ExternalLink, Search, Link2, Copy } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Search, Link2, Copy, Edit2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface LinkItem {
   id: string; url: string; short_key: string | null; title: string;
@@ -35,6 +37,8 @@ export default function LinkVault() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingLink, setEditingLink] = useState<LinkItem | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; linkId: string | null }>({ open: false, linkId: null });
   const [form, setForm] = useState({ url: '', title: '', short_key: '', tags: '', description: '', category: 'other' });
 
   const fetchLinks = async () => {
@@ -47,15 +51,32 @@ export default function LinkVault() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await supabase.from('links').insert({
-      url: form.url, title: form.title, short_key: form.short_key || null,
-      tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
-      description: form.description || null, category: form.category,
-      user_id: user!.id,
-    });
+    if (editingLink) {
+      await supabase.from('links').update({
+        url: form.url, title: form.title, short_key: form.short_key || null,
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
+        description: form.description || null, category: form.category,
+      }).eq('id', editingLink.id);
+      toast({ title: 'Link updated' });
+    } else {
+      await supabase.from('links').insert({
+        url: form.url, title: form.title, short_key: form.short_key || null,
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
+        description: form.description || null, category: form.category,
+        user_id: user!.id,
+      });
+      toast({ title: 'Link saved' });
+    }
     setDialogOpen(false);
     setForm({ url: '', title: '', short_key: '', tags: '', description: '', category: 'other' });
+    setEditingLink(null);
     fetchLinks();
+  };
+
+  const handleEdit = (link: LinkItem) => {
+    setEditingLink(link);
+    setForm({ url: link.url, title: link.title, short_key: link.short_key ?? '', tags: (link.tags ?? []).join(', '), description: link.description ?? '', category: link.category });
+    setDialogOpen(true);
   };
 
   const handleOpen = async (link: LinkItem) => {
@@ -70,8 +91,15 @@ export default function LinkVault() {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('links').delete().eq('id', id);
+    setDeleteConfirm({ open: true, linkId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.linkId) return;
+    await supabase.from('links').delete().eq('id', deleteConfirm.linkId);
+    setDeleteConfirm({ open: false, linkId: null });
     fetchLinks();
+    toast({ title: 'Link deleted' });
   };
 
   const filtered = links.filter(l => {
@@ -88,15 +116,14 @@ export default function LinkVault() {
 
   return (
     <div className="animate-fade-in space-y-6">
+      <PageHeader title="Link Vault" />
+
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Link Vault</h1>
-          <p className="text-sm text-muted-foreground">{links.length} links saved</p>
-        </div>
+        <p className="text-sm text-muted-foreground">{links.length} links saved</p>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />Save Link</Button></DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Save a Link</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editingLink ? 'Edit Link' : 'Save a Link'}</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>URL</Label>
@@ -131,7 +158,7 @@ export default function LinkVault() {
                 <Label>Description</Label>
                 <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
               </div>
-              <Button type="submit" className="w-full">Save Link</Button>
+              <Button type="submit" className="w-full">{editingLink ? 'Update Link' : 'Save Link'}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -201,6 +228,7 @@ export default function LinkVault() {
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopy(l.url)}><Copy className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpen(l)}><ExternalLink className="h-3.5 w-3.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(l)}><Edit2 className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDelete(l.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>
               </CardContent>
@@ -208,6 +236,15 @@ export default function LinkVault() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Delete Link"
+        description="Are you sure you want to delete this link? This action cannot be undone."
+        onConfirm={confirmDelete}
+        variant="destructive"
+      />
     </div>
   );
 }

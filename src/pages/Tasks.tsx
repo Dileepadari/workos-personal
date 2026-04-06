@@ -10,8 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, Clock, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Clock, Edit2, CheckCircle2, Circle } from 'lucide-react';
 import { format } from 'date-fns';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Task {
   id: string;
@@ -51,6 +53,8 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState<string>('all');
   const [form, setForm] = useState<TaskForm>({ ...emptyForm });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; taskId: string | null }>({ open: false, taskId: null });
+  const [completeConfirm, setCompleteConfirm] = useState<{ open: boolean; taskId: string | null }>({ open: false, taskId: null });
 
   const fetchData = async () => {
     const [tasksRes, projectsRes] = await Promise.all([
@@ -101,12 +105,27 @@ export default function Tasks() {
 
   const toggleDone = async (task: Task) => {
     const newStatus = task.status === 'done' ? 'todo' : 'done';
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id);
+    setCompleteConfirm({ open: true, taskId: task.id });
+  };
+
+  const confirmToggleDone = async () => {
+    if (!completeConfirm.taskId) return;
+    const task = tasks.find(t => t.id === completeConfirm.taskId);
+    if (!task) return;
+    const newStatus = task.status === 'done' ? 'todo' : 'done';
+    await supabase.from('tasks').update({ status: newStatus }).eq('id', completeConfirm.taskId);
+    setCompleteConfirm({ open: false, taskId: null });
     fetchData();
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('tasks').delete().eq('id', id);
+    setDeleteConfirm({ open: true, taskId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.taskId) return;
+    await supabase.from('tasks').delete().eq('id', deleteConfirm.taskId);
+    setDeleteConfirm({ open: false, taskId: null });
     fetchData();
   };
 
@@ -127,11 +146,10 @@ export default function Tasks() {
 
   return (
     <div className="animate-fade-in space-y-6">
+      <PageHeader title="Tasks" />
+
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Tasks</h1>
-          <p className="text-sm text-muted-foreground">{tasks.filter((t) => t.status !== 'done').length} open tasks</p>
-        </div>
+        <p className="text-sm text-muted-foreground">{tasks.filter((t) => t.status !== 'done').length} open tasks</p>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" />New Task</Button>
@@ -260,6 +278,19 @@ export default function Tasks() {
                       )}
                     </div>
                     <div className="flex flex-col gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-7 w-7"
+                        title={task.status === 'done' ? 'Mark as incomplete' : 'Mark as complete'}
+                        onClick={() => toggleDone(task)}
+                      >
+                        {task.status === 'done' ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                        ) : (
+                          <Circle className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(task)}>
                         <Edit2 className="h-3.5 w-3.5" />
                       </Button>
@@ -277,6 +308,25 @@ export default function Tasks() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={completeConfirm.open}
+        onOpenChange={(open) => setCompleteConfirm({ ...completeConfirm, open })}
+        title={tasks.find(t => t.id === completeConfirm.taskId)?.status === 'done' ? 'Mark as incomplete?' : 'Mark as complete?'}
+        description={tasks.find(t => t.id === completeConfirm.taskId)?.status === 'done' ? 'This will move the task back to todo.' : 'This will mark the task as done.'}
+        confirmText={tasks.find(t => t.id === completeConfirm.taskId)?.status === 'done' ? 'Mark incomplete' : 'Mark complete'}
+        onConfirm={confirmToggleDone}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Delete task?"
+        description="This action cannot be undone. The task will be permanently deleted."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

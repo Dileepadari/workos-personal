@@ -9,6 +9,7 @@ import { Trash2, Edit2, Merge, Tag } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { PageHeader } from '@/components/PageHeader';
 
 interface TagInfo { name: string; count: number; tables: string[]; }
 
@@ -97,10 +98,9 @@ export default function TagManager() {
 
   return (
     <div className="animate-fade-in space-y-6 max-w-[800px]">
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Tag Manager</h1>
-        <p className="text-sm text-muted-foreground">{tags.length} tags across all content</p>
-      </div>
+      <PageHeader title="Tag Manager" />
+
+      <p className="text-sm text-muted-foreground">{tags.length} tags across all content</p>
 
       {tags.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">No tags found</CardContent></Card>

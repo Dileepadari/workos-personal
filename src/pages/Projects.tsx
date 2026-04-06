@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Plus, Trash2, Edit2, Search, X, ArrowUpDown } from 'lucide-react';
 import { format } from 'date-fns';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Project {
   id: string; name: string; description: string | null; status: 'active' | 'archived' | 'on_hold';
@@ -35,6 +37,7 @@ export default function Projects() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; projectId: string | null }>({ open: false, projectId: null });
   const [form, setForm] = useState({
     name: '', description: '', status: 'active' as Project['status'], color: '#2D6A6A',
     type: 'personal', tags: '', slug: '', start_date: '', target_end_date: '',
@@ -103,7 +106,13 @@ export default function Projects() {
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from('projects').delete().eq('id', id);
+    setDeleteConfirm({ open: true, projectId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.projectId) return;
+    await supabase.from('projects').delete().eq('id', deleteConfirm.projectId);
+    setDeleteConfirm({ open: false, projectId: null });
     fetchProjects();
   };
 
@@ -127,11 +136,10 @@ export default function Projects() {
 
   return (
     <div className="animate-fade-in space-y-4 sm:space-y-6">
+      <PageHeader title="Projects" />
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Projects</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">{projects.length} projects</p>
-        </div>
+        <p className="text-xs sm:text-sm text-muted-foreground">{projects.length} projects</p>
         <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" />New Project</Button>
@@ -314,6 +322,16 @@ export default function Projects() {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Delete project?"
+        description="This action cannot be undone. The project and all associated tasks will be permanently deleted."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

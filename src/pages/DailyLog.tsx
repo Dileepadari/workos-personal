@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ChevronLeft, ChevronRight, Plus, Zap, AlertCircle, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Zap, AlertCircle, Trophy, Trash2 } from 'lucide-react';
 import { format, addDays, subDays } from 'date-fns';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface DailyLog {
   id: string; date: string; notes_html: string | null;
@@ -26,6 +28,8 @@ export default function DailyLogPage() {
   const [form, setForm] = useState({ notes: '', energy: 4, wins: '', blockers: '' });
   const [newWin, setNewWin] = useState('');
   const [newBlocker, setNewBlocker] = useState('');
+  const [deleteWinConfirm, setDeleteWinConfirm] = useState<{ open: boolean; index: number | null }>({ open: false, index: null });
+  const [deleteBlockerConfirm, setDeleteBlockerConfirm] = useState<{ open: boolean; index: number | null }>({ open: false, index: null });
 
   const fetchLog = async (date: string) => {
     setLoading(true);
@@ -89,10 +93,27 @@ export default function DailyLogPage() {
     fetchLog(currentDate);
   };
 
+  const deleteWin = async (index: number) => {
+    if (!log) return;
+    const wins = log.wins.filter((_, i) => i !== index);
+    await supabase.from('daily_log').update({ wins }).eq('id', log.id);
+    setDeleteWinConfirm({ open: false, index: null });
+    fetchLog(currentDate);
+  };
+
+  const deleteBlocker = async (index: number) => {
+    if (!log) return;
+    const blockers = log.blockers.filter((_, i) => i !== index);
+    await supabase.from('daily_log').update({ blockers }).eq('id', log.id);
+    setDeleteBlockerConfirm({ open: false, index: null });
+    fetchLog(currentDate);
+  };
+
   return (
     <div className="animate-fade-in space-y-6">
+      <PageHeader title="Daily Log" />
+
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-foreground">Daily Log</h1>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => setCurrentDate(format(subDays(new Date(currentDate), 1), 'yyyy-MM-dd'))}>
             <ChevronLeft className="h-4 w-4" />
@@ -141,8 +162,17 @@ export default function DailyLogPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {(log?.wins ?? []).map((win, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-foreground">
-                    <span className="text-success">✓</span> {win}
+                  <div key={i} className="flex items-center gap-2 text-sm text-foreground group">
+                    <span className="text-success">✓</span> 
+                    <span className="flex-1">{win}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                      onClick={() => setDeleteWinConfirm({ open: true, index: i })}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 ))}
                 <form onSubmit={e => { e.preventDefault(); addWin(); }} className="flex gap-2">
@@ -159,8 +189,17 @@ export default function DailyLogPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {(log?.blockers ?? []).map((b, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm text-foreground">
-                    <span className="text-destructive">•</span> {b}
+                  <div key={i} className="flex items-center gap-2 text-sm text-foreground group">
+                    <span className="text-destructive">•</span> 
+                    <span className="flex-1">{b}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-destructive"
+                      onClick={() => setDeleteBlockerConfirm({ open: true, index: i })}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 ))}
                 <form onSubmit={e => { e.preventDefault(); addBlocker(); }} className="flex gap-2">

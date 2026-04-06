@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, ExternalLink, Edit2 } from 'lucide-react';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Bookmark {
   id: string;
@@ -23,6 +25,8 @@ export default function Bookmarks() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; bookmarkId: string | null }>({ open: false, bookmarkId: null });
   const [form, setForm] = useState({ title: '', url: '', description: '', tags: '' });
 
   const fetchBookmarks = async () => {
@@ -43,27 +47,39 @@ export default function Bookmarks() {
     });
     setDialogOpen(false);
     setForm({ title: '', url: '', description: '', tags: '' });
+    setEditingBookmark(null);
     fetchBookmarks();
   };
 
+  const handleEdit = (b: Bookmark) => {
+    setEditingBookmark(b);
+    setForm({ title: b.title, url: b.url, description: b.description ?? '', tags: (b.tags ?? []).join(', ') });
+    setDialogOpen(true);
+  };
+
   const handleDelete = async (id: string) => {
-    await supabase.from('bookmarks').delete().eq('id', id);
+    setDeleteConfirm({ open: true, bookmarkId: id });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.bookmarkId) return;
+    await supabase.from('bookmarks').delete().eq('id', deleteConfirm.bookmarkId);
+    setDeleteConfirm({ open: false, bookmarkId: null });
     fetchBookmarks();
   };
 
   return (
     <div className="animate-fade-in space-y-6">
+      <PageHeader title="Bookmarks" />
+
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">Bookmarks</h1>
-          <p className="text-sm text-muted-foreground">{bookmarks.length} bookmarks</p>
-        </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <p className="text-sm text-muted-foreground">{bookmarks.length} bookmarks</p>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setForm({ title: '', url: '', description: '', tags: '' }); setEditingBookmark(null); } }}>
           <DialogTrigger asChild>
             <Button><Plus className="mr-2 h-4 w-4" />Add Bookmark</Button>
           </DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>Add Bookmark</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editingBookmark ? 'Edit Bookmark' : 'Add Bookmark'}</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Title</Label>
@@ -119,14 +135,29 @@ export default function Bookmarks() {
                     </div>
                   )}
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleDelete(b.id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(b)}>
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(b.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Delete bookmark?"
+        description="This action cannot be undone. The bookmark will be permanently deleted."
+        confirmText="Delete"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

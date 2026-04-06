@@ -7,6 +7,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Play, Pause, RotateCcw, X, CheckSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '@/components/PageHeader';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 
 interface Task { id: string; title: string; status: string; priority: string; project_id: string | null; }
 interface Project { id: string; name: string; color: string; }
@@ -21,6 +23,7 @@ export default function FocusMode() {
   const [timeLeft, setTimeLeft] = useState(25 * 60); // 25 min
   const [isBreak, setIsBreak] = useState(false);
   const [sessions, setSessions] = useState(0);
+  const [completeTaskConfirm, setCompleteTaskConfirm] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -64,6 +67,7 @@ export default function FocusMode() {
     await supabase.from('tasks').update({ status: 'done' }).eq('id', selectedTask);
     setTasks(prev => prev.filter(t => t.id !== selectedTask));
     setSelectedTask('');
+    setCompleteTaskConfirm(false);
   };
 
   const mins = Math.floor(timeLeft / 60);
@@ -74,12 +78,7 @@ export default function FocusMode() {
 
   return (
     <div className="flex min-h-[80vh] flex-col items-center justify-center gap-8 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold text-foreground">Focus Mode</h1>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-          <X className="mr-1 h-4 w-4" />Exit
-        </Button>
-      </div>
+      <PageHeader title="Focus Mode" />
 
       {/* Task selector */}
       <div className="w-full max-w-md">
@@ -117,7 +116,7 @@ export default function FocusMode() {
           {isRunning ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
         </Button>
         {selectedTask && (
-          <Button variant="outline" size="icon" onClick={completeTask} title="Mark task complete">
+          <Button variant="outline" size="icon" onClick={() => setCompleteTaskConfirm(true)} title="Mark task complete">
             <CheckSquare className="h-4 w-4" />
           </Button>
         )}
