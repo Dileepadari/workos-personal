@@ -18,6 +18,11 @@ import LinkVault from "./pages/LinkVault";
 import DailyLog from "./pages/DailyLog";
 import Bookmarks from "./pages/Bookmarks";
 import SettingsPage from "./pages/SettingsPage";
+import CalendarPage from "./pages/CalendarPage";
+import FocusMode from "./pages/FocusMode";
+import WeeklyReview from "./pages/WeeklyReview";
+import TagManager from "./pages/TagManager";
+import CollabView from "./pages/CollabView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +53,7 @@ function AppWithSearch() {
       <QuickSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Routes>
         <Route path="/auth" element={<Auth />} />
+        <Route path="/collab/:slug" element={<CollabView />} />
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
           <Route path="projects" element={<Projects />} />
@@ -57,7 +63,11 @@ function AppWithSearch() {
           <Route path="links" element={<LinkVault />} />
           <Route path="log" element={<DailyLog />} />
           <Route path="bookmarks" element={<Bookmarks />} />
+          <Route path="calendar" element={<CalendarPage />} />
+          <Route path="focus" element={<FocusMode />} />
+          <Route path="review" element={<WeeklyReview />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/tags" element={<TagManager />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
