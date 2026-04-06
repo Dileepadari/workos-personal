@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FolderKanban, CheckSquare, FileText, Link2, Plus, Clock, AlertTriangle, ArrowRight, Calendar } from 'lucide-react';
+import { FolderKanban, CheckSquare, FileText, Link2, Plus, Clock, AlertTriangle, Calendar, CalendarClock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,7 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { format, isToday, isBefore, startOfToday, addDays, isWithinInterval } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface Task {
   id: string; title: string; status: string; priority: string;
@@ -71,6 +74,9 @@ export default function Dashboard() {
   const projectMap = Object.fromEntries(projects.map(p => [p.id, p]));
 
   const totalEstimateToday = todayTasks.reduce((sum, t) => sum + (t.time_estimate_min ?? 0), 0);
+  const totalEstimateWeek = openTasks.filter(t => t.due_date && isWithinInterval(new Date(t.due_date), { start: today, end: addDays(today, 7) })).reduce((sum, t) => sum + (t.time_estimate_min ?? 0), 0);
+  const availableHours = 7 * 8; // 7 days * 8h
+  const workloadWarning = totalEstimateWeek / 60 > availableHours;
 
   const handleQuickTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,20 +93,41 @@ export default function Dashboard() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
   };
 
-  const TaskRow = ({ task }: { task: Task }) => (
-    <div className="flex items-center gap-3 rounded-md px-3 py-2 transition-colors hover:bg-muted/50">
+  const snoozeTask = async (taskId: string, newDate: Date) => {
+    const dateStr = format(newDate, 'yyyy-MM-dd');
+    await supabase.from('tasks').update({ due_date: dateStr }).eq('id', taskId);
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, due_date: dateStr } : t));
+  };
+
+  const TaskRow = ({ task, showSnooze }: { task: Task; showSnooze?: boolean }) => (
+    <div className="flex items-center gap-2 sm:gap-3 rounded-md px-2 sm:px-3 py-2 transition-colors hover:bg-muted/50">
       <Checkbox checked={task.status === 'done'} onCheckedChange={() => toggleTask(task.id, task.status)} />
       <div className="flex-1 min-w-0">
-        <span className={`text-sm ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</span>
+        <span className={`text-xs sm:text-sm ${task.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{task.title}</span>
       </div>
       {task.project_id && projectMap[task.project_id] && (
-        <Badge variant="outline" className="text-xs shrink-0">
+        <Badge variant="outline" className="text-[10px] sm:text-xs shrink-0 hidden sm:flex">
           <span className="mr-1 h-1.5 w-1.5 rounded-full inline-block" style={{ backgroundColor: projectMap[task.project_id].color }} />
-          {projectMap[task.project_id].name.substring(0, 15)}
+          {projectMap[task.project_id].name.substring(0, 12)}
         </Badge>
       )}
-      <Badge className={`text-xs shrink-0 ${priorityColors[task.priority]}`}>{task.priority}</Badge>
-      {task.time_estimate_min && <span className="text-xs text-muted-foreground shrink-0">{task.time_estimate_min}m</span>}
+      <Badge className={`text-[10px] sm:text-xs shrink-0 ${priorityColors[task.priority]}`}>{task.priority}</Badge>
+      {task.time_estimate_min && <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 hidden sm:inline">{task.time_estimate_min}m</span>}
+      {showSnooze && (
+        <div className="flex gap-1 shrink-0">
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => snoozeTask(task.id, addDays(new Date(), 1))}>
+            Tomorrow
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 px-1.5"><CalendarClock className="h-3 w-3" /></Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <CalendarPicker mode="single" onSelect={(d) => d && snoozeTask(task.id, d)} className={cn("p-3 pointer-events-auto")} />
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
     </div>
   );
 
@@ -109,11 +136,11 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-[1200px]">
-      <div className="flex items-center justify-between">
+    <div className="animate-fade-in space-y-4 sm:space-y-6 max-w-[1200px]">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dashboard</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {todayTasks.length} tasks today · {totalEstimateToday > 0 ? `${Math.floor(totalEstimateToday / 60)}h ${totalEstimateToday % 60}m estimated` : 'no estimates'}
           </p>
         </div>
@@ -129,8 +156,52 @@ export default function Dashboard() {
         <Button type="submit" variant="secondary" disabled={!quickTask.trim()}><Plus className="h-4 w-4" /></Button>
       </form>
 
+      {/* Workload warning */}
+      {workloadWarning && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="flex items-center gap-3 p-3">
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+            <p className="text-xs sm:text-sm text-warning">Workload warning: {Math.round(totalEstimateWeek / 60)}h estimated this week exceeds {availableHours}h available.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Time Estimates Summary */}
+      <Card>
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <span className="text-xs sm:text-sm font-medium text-foreground">This Week</span>
+            </div>
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span>{Math.round(totalEstimateWeek / 60)}h estimated</span>
+              <span>{doneTodayTasks.length} completed</span>
+              <span>{openTasks.length} open</span>
+            </div>
+          </div>
+          {/* Per-project breakdown */}
+          <div className="mt-3 space-y-1.5">
+            {projects.slice(0, 5).map(p => {
+              const projTasks = openTasks.filter(t => t.project_id === p.id);
+              const est = projTasks.reduce((s, t) => s + (t.time_estimate_min ?? 0), 0);
+              if (est === 0) return null;
+              return (
+                <div key={p.id} className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-20 sm:w-28 truncate">{p.name}</span>
+                  <div className="flex-1 h-2 rounded-full bg-muted">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min((est / totalEstimateWeek) * 100, 100)}%`, backgroundColor: p.color }} />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground w-10 text-right">{Math.round(est / 60)}h</span>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Project Status Strip */}
-      <div className="flex gap-3 overflow-x-auto pb-1">
+      <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
         {projects.map(p => {
           const projTasks = tasks.filter(t => t.project_id === p.id);
           const done = projTasks.filter(t => t.status === 'done').length;
@@ -138,11 +209,11 @@ export default function Dashboard() {
           const pct = total > 0 ? Math.round((done / total) * 100) : 0;
           return (
             <Link key={p.id} to={`/projects/${p.slug || p.id}`} className="shrink-0">
-              <Card className="w-48 transition-colors hover:bg-card/80">
+              <Card className="w-40 sm:w-48 transition-colors hover:bg-card/80">
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                    <span className="text-sm font-medium text-foreground truncate">{p.name.substring(0, 20)}</span>
+                    <span className="text-xs sm:text-sm font-medium text-foreground truncate">{p.name.substring(0, 18)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 flex-1 rounded-full bg-muted">
@@ -150,7 +221,7 @@ export default function Dashboard() {
                     </div>
                     <span className="text-xs text-muted-foreground">{pct}%</span>
                   </div>
-                  <Badge className={`mt-2 text-xs capitalize ${projectStatusColors[p.status] || 'bg-muted text-muted-foreground'}`}>{p.status.replace('_', ' ')}</Badge>
+                  <Badge className={`mt-2 text-[10px] capitalize ${projectStatusColors[p.status] || 'bg-muted text-muted-foreground'}`}>{p.status.replace('_', ' ')}</Badge>
                 </CardContent>
               </Card>
             </Link>
@@ -158,7 +229,7 @@ export default function Dashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
         {/* Overdue */}
         {overdueTasks.length > 0 && (
           <Card className="border-destructive/30">
@@ -169,7 +240,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {overdueTasks.map(t => <TaskRow key={t.id} task={t} />)}
+              {overdueTasks.map(t => <TaskRow key={t.id} task={t} showSnooze />)}
             </CardContent>
           </Card>
         )}
@@ -180,6 +251,11 @@ export default function Dashboard() {
             <CardTitle className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-primary" />Today
               <Badge variant="secondary" className="text-xs">{todayTasks.length}</Badge>
+              {todayTasks.length > 0 && (
+                <span className="ml-auto text-[10px] sm:text-xs text-muted-foreground">
+                  {doneTodayTasks.length}/{todayTasks.length + doneTodayTasks.length} done
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
@@ -209,17 +285,16 @@ export default function Dashboard() {
             {upcomingTasks.length === 0 ? (
               <p className="py-3 text-center text-xs text-muted-foreground">No upcoming tasks</p>
             ) : upcomingTasks.map(t => (
-              <div key={t.id} className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-muted/50">
-                <span className="text-xs text-muted-foreground w-12 shrink-0">{format(new Date(t.due_date!), 'MMM d')}</span>
-                <span className="text-sm text-foreground flex-1 truncate">{t.title}</span>
-                <Badge className={`text-xs ${priorityColors[t.priority]}`}>{t.priority}</Badge>
+              <div key={t.id} className="flex items-center gap-2 sm:gap-3 rounded-md px-2 sm:px-3 py-2 hover:bg-muted/50">
+                <span className="text-[10px] sm:text-xs text-muted-foreground w-10 sm:w-12 shrink-0">{format(new Date(t.due_date!), 'MMM d')}</span>
+                <span className="text-xs sm:text-sm text-foreground flex-1 truncate">{t.title}</span>
+                <Badge className={`text-[10px] sm:text-xs ${priorityColors[t.priority]}`}>{t.priority}</Badge>
               </div>
             ))}
-            {/* Milestones */}
             {milestones.filter(m => isWithinInterval(new Date(m.date), { start: today, end: addDays(today, 7) })).map(m => (
-              <div key={m.id} className="flex items-center gap-3 rounded-md px-3 py-2 bg-primary/5">
-                <span className="text-xs text-primary w-12 shrink-0">{format(new Date(m.date), 'MMM d')}</span>
-                <span className="text-sm text-primary flex-1 truncate">🚩 {m.title}</span>
+              <div key={m.id} className="flex items-center gap-2 sm:gap-3 rounded-md px-2 sm:px-3 py-2 bg-primary/5">
+                <span className="text-[10px] sm:text-xs text-primary w-10 sm:w-12 shrink-0">{format(new Date(m.date), 'MMM d')}</span>
+                <span className="text-xs sm:text-sm text-primary flex-1 truncate">🚩 {m.title}</span>
               </div>
             ))}
           </CardContent>
@@ -227,7 +302,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Stats Row */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
         {[
           { label: 'Projects', value: stats.projects, icon: FolderKanban, to: '/projects' },
           { label: 'Open Tasks', value: openTasks.length, icon: CheckSquare, to: '/tasks' },
@@ -236,11 +311,11 @@ export default function Dashboard() {
         ].map(({ label, value, icon: Icon, to }) => (
           <Link key={label} to={to}>
             <Card className="transition-colors hover:bg-card/80">
-              <CardContent className="flex items-center gap-3 p-4">
-                <Icon className="h-5 w-5 text-primary" />
+              <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+                <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                 <div>
-                  <p className="text-xl font-semibold text-foreground">{value}</p>
-                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-lg sm:text-xl font-semibold text-foreground">{value}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
                 </div>
               </CardContent>
             </Card>
