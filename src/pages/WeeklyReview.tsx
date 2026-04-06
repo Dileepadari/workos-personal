@@ -77,7 +77,7 @@ export default function WeeklyReview() {
   if (loading) return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-[800px]">
+    <div className="animate-fade-in space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-foreground">Weekly Review</h1>
         <p className="text-sm text-muted-foreground">Week of {format(startOfWeek(new Date()), 'MMM d')} — {format(endOfWeek(new Date()), 'MMM d, yyyy')}</p>

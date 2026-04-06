@@ -87,7 +87,7 @@ export default function LinkVault() {
   const exactMatch = search && links.find(l => l.short_key?.toLowerCase() === search.toLowerCase());
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-[1200px]">
+    <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Link Vault</h1>

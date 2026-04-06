@@ -136,7 +136,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="animate-fade-in space-y-4 sm:space-y-6 max-w-[1200px]">
+    <div className="animate-fade-in space-y-4 sm:space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Dashboard</h1>
@@ -165,6 +165,28 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+{/* Quick Stats Row */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
+        {[
+          { label: 'Projects', value: stats.projects, icon: FolderKanban, to: '/projects' },
+          { label: 'Open Tasks', value: openTasks.length, icon: CheckSquare, to: '/tasks' },
+          { label: 'Links Saved', value: stats.links, icon: Link2, to: '/links' },
+          { label: 'Notes', value: stats.notes, icon: FileText, to: '/notes' },
+        ].map(({ label, value, icon: Icon, to }) => (
+          <Link key={label} to={to}>
+            <Card className="transition-colors hover:bg-card/80">
+              <CardContent className="flex items-center gap-3 p-3 sm:p-4">
+                <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                <div>
+                  <p className="text-lg sm:text-xl font-semibold text-foreground">{value}</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
 
       {/* Time Estimates Summary */}
       <Card>
@@ -246,7 +268,7 @@ export default function Dashboard() {
         )}
 
         {/* Today */}
-        <Card>
+        <Card className="w-full lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-primary" />Today
@@ -274,7 +296,7 @@ export default function Dashboard() {
         </Card>
 
         {/* Upcoming 7 Days */}
-        <Card>
+        <Card className="w-full lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-primary" />Next 7 Days
@@ -299,28 +321,6 @@ export default function Dashboard() {
             ))}
           </CardContent>
         </Card>
-      </div>
-
-      {/* Quick Stats Row */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
-        {[
-          { label: 'Projects', value: stats.projects, icon: FolderKanban, to: '/projects' },
-          { label: 'Open Tasks', value: openTasks.length, icon: CheckSquare, to: '/tasks' },
-          { label: 'Links Saved', value: stats.links, icon: Link2, to: '/links' },
-          { label: 'Notes', value: stats.notes, icon: FileText, to: '/notes' },
-        ].map(({ label, value, icon: Icon, to }) => (
-          <Link key={label} to={to}>
-            <Card className="transition-colors hover:bg-card/80">
-              <CardContent className="flex items-center gap-3 p-3 sm:p-4">
-                <Icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                <div>
-                  <p className="text-lg sm:text-xl font-semibold text-foreground">{value}</p>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground">{label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
       </div>
     </div>
   );

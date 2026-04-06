@@ -90,7 +90,7 @@ export default function DailyLogPage() {
   };
 
   return (
-    <div className="animate-fade-in space-y-6 max-w-[800px]">
+    <div className="animate-fade-in space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-foreground">Daily Log</h1>
         <div className="flex items-center gap-2">

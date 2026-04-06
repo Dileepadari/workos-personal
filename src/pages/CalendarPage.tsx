@@ -86,7 +86,7 @@ export default function CalendarPage() {
   if (loading) return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
 
   return (
-    <div className="animate-fade-in space-y-4 max-w-[1200px]">
+    <div className="animate-fade-in space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
