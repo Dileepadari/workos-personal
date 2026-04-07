@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FolderKanban, CheckSquare, FileText, Link2, Plus, Clock, AlertTriangle, Calendar, CalendarClock } from 'lucide-react';
+import { FolderKanban, CheckSquare, FileText, Link2, Plus, Clock, AlertTriangle, Calendar, CalendarClock, Flag, Video, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/PageHeader';
 
 interface Task {
   id: string; title: string; status: string; priority: string;
-  due_date: string | null; time_estimate_min: number | null;
+  due_date: string | null; due_time: string | null; time_estimate_min: number | null;
   project_id: string | null;
 }
 interface Project {
@@ -24,6 +24,9 @@ interface Project {
 }
 interface Milestone {
   id: string; title: string; date: string; project_id: string; is_completed: boolean;
+}
+interface Meeting {
+  id: string; title: string; scheduled_at: string; project_id: string;
 }
 
 const priorityColors: Record<string, string> = {
@@ -43,40 +46,43 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [quickTask, setQuickTask] = useState('');
-  const [stats, setStats] = useState({ projects: 0, links: 0, notes: 0 });
+  const [stats, setStats] = useState({ projects: 0, links: 0, notes: 0, meetings: 0 });
 
-  useEffect(() => {
+  const fetchData = async () => {
     if (!user) return;
-    const fetchData = async () => {
-      const [tasksRes, projRes, msRes, linksRes, notesRes] = await Promise.all([
-        supabase.from('tasks').select('id, title, status, priority, due_date, time_estimate_min, project_id').order('due_date', { ascending: true }),
-        supabase.from('projects').select('id, name, status, color, slug').order('updated_at', { ascending: false }),
-        supabase.from('milestones').select('*').eq('is_completed', false).order('date', { ascending: true }),
-        supabase.from('links').select('id', { count: 'exact', head: true }),
-        supabase.from('notes').select('id', { count: 'exact', head: true }),
-      ]);
-      setTasks(tasksRes.data ?? []);
-      setProjects(projRes.data ?? []);
-      setMilestones(msRes.data ?? []);
-      setStats({ projects: projRes.data?.length ?? 0, links: linksRes.count ?? 0, notes: notesRes.count ?? 0 });
-      setLoading(false);
-    };
-    fetchData();
-  }, [user]);
+    const [tasksRes, projRes, msRes, linksRes, notesRes, meetRes] = await Promise.all([
+      supabase.from('tasks').select('id, title, status, priority, due_date, due_time, time_estimate_min, project_id').order('due_date', { ascending: true }),
+      supabase.from('projects').select('id, name, status, color, slug').order('updated_at', { ascending: false }),
+      supabase.from('milestones').select('*').eq('is_completed', false).order('date', { ascending: true }),
+      supabase.from('links').select('id', { count: 'exact', head: true }),
+      supabase.from('notes').select('id', { count: 'exact', head: true }),
+      supabase.from('meetings').select('id, title, scheduled_at, project_id').gte('scheduled_at', new Date().toISOString()).order('scheduled_at').limit(10),
+    ]);
+    setTasks(tasksRes.data ?? []);
+    setProjects(projRes.data ?? []);
+    setMilestones(msRes.data ?? []);
+    setMeetings(meetRes.data ?? []);
+    setStats({ projects: projRes.data?.length ?? 0, links: linksRes.count ?? 0, notes: notesRes.count ?? 0, meetings: meetRes.data?.length ?? 0 });
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchData(); }, [user]);
 
   const today = startOfToday();
-  const openTasks = tasks.filter(t => t.status !== 'done');
-  const todayTasks = openTasks.filter(t => t.due_date && isToday(new Date(t.due_date)));
-  const overdueTasks = openTasks.filter(t => t.due_date && isBefore(new Date(t.due_date), today));
-  const upcomingTasks = openTasks.filter(t => t.due_date && isWithinInterval(new Date(t.due_date), { start: addDays(today, 1), end: addDays(today, 7) }));
+  const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'dropped');
+  const todayTasks = activeTasks.filter(t => t.due_date && isToday(new Date(t.due_date)));
+  const overdueTasks = activeTasks.filter(t => t.due_date && isBefore(new Date(t.due_date), today));
+  const upcomingTasks = activeTasks.filter(t => t.due_date && isWithinInterval(new Date(t.due_date), { start: addDays(today, 1), end: addDays(today, 7) }));
   const doneTodayTasks = tasks.filter(t => t.status === 'done');
+  const blockedTasks = tasks.filter(t => t.status === 'blocked');
   const projectMap = Object.fromEntries(projects.map(p => [p.id, p]));
 
   const totalEstimateToday = todayTasks.reduce((sum, t) => sum + (t.time_estimate_min ?? 0), 0);
-  const totalEstimateWeek = openTasks.filter(t => t.due_date && isWithinInterval(new Date(t.due_date), { start: today, end: addDays(today, 7) })).reduce((sum, t) => sum + (t.time_estimate_min ?? 0), 0);
-  const availableHours = 7 * 8; // 7 days * 8h
+  const totalEstimateWeek = activeTasks.filter(t => t.due_date && isWithinInterval(new Date(t.due_date), { start: today, end: addDays(today, 7) })).reduce((sum, t) => sum + (t.time_estimate_min ?? 0), 0);
+  const availableHours = 7 * 8;
   const workloadWarning = totalEstimateWeek / 60 > availableHours;
 
   const handleQuickTask = async (e: React.FormEvent) => {
@@ -84,8 +90,7 @@ export default function Dashboard() {
     if (!quickTask.trim()) return;
     await supabase.from('tasks').insert({ title: quickTask.trim(), user_id: user!.id, status: 'todo', priority: 'medium' });
     setQuickTask('');
-    const { data } = await supabase.from('tasks').select('id, title, status, priority, due_date, time_estimate_min, project_id').order('due_date', { ascending: true });
-    setTasks(data ?? []);
+    fetchData();
   };
 
   const toggleTask = async (taskId: string, currentStatus: string) => {
@@ -114,15 +119,12 @@ export default function Dashboard() {
       )}
       <Badge className={`text-[10px] sm:text-xs shrink-0 ${priorityColors[task.priority]}`}>{task.priority}</Badge>
       {task.time_estimate_min && <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0 hidden sm:inline">{task.time_estimate_min}m</span>}
+      {task.due_time && <span className="text-[10px] text-muted-foreground shrink-0 hidden sm:inline">{task.due_time}</span>}
       {showSnooze && (
         <div className="flex gap-1 shrink-0">
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => snoozeTask(task.id, addDays(new Date(), 1))}>
-            Tomorrow
-          </Button>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => snoozeTask(task.id, addDays(new Date(), 1))}>Tomorrow</Button>
           <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-6 px-1.5"><CalendarClock className="h-3 w-3" /></Button>
-            </PopoverTrigger>
+            <PopoverTrigger asChild><Button variant="ghost" size="sm" className="h-6 px-1.5"><CalendarClock className="h-3 w-3" /></Button></PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <CalendarPicker mode="single" onSelect={(d) => d && snoozeTask(task.id, d)} className={cn("p-3 pointer-events-auto")} />
             </PopoverContent>
@@ -132,9 +134,7 @@ export default function Dashboard() {
     </div>
   );
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
-  }
+  if (loading) return <div className="flex h-64 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>;
 
   return (
     <div className="animate-fade-in space-y-4 sm:space-y-6">
@@ -143,6 +143,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-xs sm:text-sm text-muted-foreground">
           {todayTasks.length} tasks today · {totalEstimateToday > 0 ? `${Math.floor(totalEstimateToday / 60)}h ${totalEstimateToday % 60}m estimated` : 'no estimates'}
+          {overdueTasks.length > 0 && <span className="text-destructive ml-2">· {overdueTasks.length} overdue</span>}
         </p>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" asChild><Link to="/tasks"><CheckSquare className="mr-1 h-3.5 w-3.5" />Tasks</Link></Button>
@@ -156,23 +157,23 @@ export default function Dashboard() {
         <Button type="submit" variant="secondary" disabled={!quickTask.trim()}><Plus className="h-4 w-4" /></Button>
       </form>
 
-      {/* Workload warning */}
       {workloadWarning && (
         <Card className="border-warning/30 bg-warning/5">
           <CardContent className="flex items-center gap-3 p-3">
             <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-            <p className="text-xs sm:text-sm text-warning">Workload warning: {Math.round(totalEstimateWeek / 60)}h estimated this week exceeds {availableHours}h available.</p>
+            <p className="text-xs sm:text-sm text-warning">Workload warning: {Math.round(totalEstimateWeek / 60)}h estimated exceeds {availableHours}h available this week.</p>
           </CardContent>
         </Card>
       )}
 
-{/* Quick Stats Row */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-5">
         {[
           { label: 'Projects', value: stats.projects, icon: FolderKanban, to: '/projects' },
-          { label: 'Open Tasks', value: openTasks.length, icon: CheckSquare, to: '/tasks' },
-          { label: 'Links Saved', value: stats.links, icon: Link2, to: '/links' },
+          { label: 'Open Tasks', value: activeTasks.length, icon: CheckSquare, to: '/tasks' },
+          { label: 'Links', value: stats.links, icon: Link2, to: '/links' },
           { label: 'Notes', value: stats.notes, icon: FileText, to: '/notes' },
+          { label: 'Meetings', value: stats.meetings, icon: Video, to: '/calendar' },
         ].map(({ label, value, icon: Icon, to }) => (
           <Link key={label} to={to}>
             <Card className="transition-colors hover:bg-card/80">
@@ -188,39 +189,55 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Time Estimates Summary */}
-      <Card>
-        <CardContent className="p-3 sm:p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
+      {/* Time + Upcoming Meetings Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
               <Clock className="h-4 w-4 text-primary" />
-              <span className="text-xs sm:text-sm font-medium text-foreground">This Week</span>
+              <span className="text-xs sm:text-sm font-medium text-foreground">Week Workload</span>
+              <span className="ml-auto text-xs text-muted-foreground">{Math.round(totalEstimateWeek / 60)}h estimated · {doneTodayTasks.length} done · {activeTasks.length} open</span>
             </div>
-            <div className="flex gap-4 text-xs text-muted-foreground">
-              <span>{Math.round(totalEstimateWeek / 60)}h estimated</span>
-              <span>{doneTodayTasks.length} completed</span>
-              <span>{openTasks.length} open</span>
-            </div>
-          </div>
-          {/* Per-project breakdown */}
-          <div className="mt-3 space-y-1.5">
-            {projects.slice(0, 5).map(p => {
-              const projTasks = openTasks.filter(t => t.project_id === p.id);
-              const est = projTasks.reduce((s, t) => s + (t.time_estimate_min ?? 0), 0);
-              if (est === 0) return null;
-              return (
-                <div key={p.id} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-20 sm:w-28 truncate">{p.name}</span>
-                  <div className="flex-1 h-2 rounded-full bg-muted">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min((est / totalEstimateWeek) * 100, 100)}%`, backgroundColor: p.color }} />
+            <div className="space-y-1.5">
+              {projects.slice(0, 5).map(p => {
+                const projTasks = activeTasks.filter(t => t.project_id === p.id);
+                const est = projTasks.reduce((s, t) => s + (t.time_estimate_min ?? 0), 0);
+                if (est === 0) return null;
+                return (
+                  <div key={p.id} className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-20 sm:w-28 truncate">{p.name}</span>
+                    <div className="flex-1 h-2 rounded-full bg-muted"><div className="h-full rounded-full transition-all" style={{ width: `${Math.min((est / totalEstimateWeek) * 100, 100)}%`, backgroundColor: p.color }} /></div>
+                    <span className="text-[10px] text-muted-foreground w-10 text-right">{Math.round(est / 60)}h</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground w-10 text-right">{Math.round(est / 60)}h</span>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming meetings */}
+        <Card>
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Video className="h-4 w-4 text-success" />
+              <span className="text-xs sm:text-sm font-medium text-foreground">Upcoming Meetings</span>
+            </div>
+            {meetings.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-2">No upcoming meetings</p>
+            ) : (
+              <div className="space-y-1.5">
+                {meetings.slice(0, 4).map(m => (
+                  <div key={m.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground w-16 shrink-0">{format(new Date(m.scheduled_at), 'MMM d')}</span>
+                    <span className="text-foreground flex-1 truncate">{m.title}</span>
+                    <span className="text-muted-foreground">{format(new Date(m.scheduled_at), 'h:mm a')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Project Status Strip */}
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0">
@@ -238,9 +255,7 @@ export default function Dashboard() {
                     <span className="text-xs sm:text-sm font-medium text-foreground truncate">{p.name.substring(0, 18)}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="h-1.5 flex-1 rounded-full bg-muted">
-                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-                    </div>
+                    <div className="h-1.5 flex-1 rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} /></div>
                     <span className="text-xs text-muted-foreground">{pct}%</span>
                   </div>
                   <Badge className={`mt-2 text-[10px] capitalize ${projectStatusColors[p.status] || 'bg-muted text-muted-foreground'}`}>{p.status.replace('_', ' ')}</Badge>
@@ -261,9 +276,20 @@ export default function Dashboard() {
                 <Badge variant="destructive" className="text-xs">{overdueTasks.length}</Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-1">
-              {overdueTasks.map(t => <TaskRow key={t.id} task={t} showSnooze />)}
-            </CardContent>
+            <CardContent className="space-y-1">{overdueTasks.map(t => <TaskRow key={t.id} task={t} showSnooze />)}</CardContent>
+          </Card>
+        )}
+
+        {/* Blocked */}
+        {blockedTasks.length > 0 && (
+          <Card className="border-warning/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm text-warning">
+                <AlertTriangle className="h-4 w-4" />Blocked
+                <Badge className="text-xs bg-warning/20 text-warning">{blockedTasks.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">{blockedTasks.map(t => <TaskRow key={t.id} task={t} />)}</CardContent>
           </Card>
         )}
 
@@ -282,20 +308,18 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-1">
             {todayTasks.length === 0 ? (
-              <p className="py-3 text-center text-xs text-muted-foreground">No tasks due today</p>
+              <p className="py-3 text-center text-xs text-muted-foreground">No tasks due today 🎉</p>
             ) : todayTasks.map(t => <TaskRow key={t.id} task={t} />)}
             {doneTodayTasks.length > 0 && (
               <details className="pt-2">
                 <summary className="cursor-pointer text-xs text-muted-foreground">✓ {doneTodayTasks.length} completed</summary>
-                <div className="mt-1 space-y-1">
-                  {doneTodayTasks.slice(0, 5).map(t => <TaskRow key={t.id} task={t} />)}
-                </div>
+                <div className="mt-1 space-y-1">{doneTodayTasks.slice(0, 5).map(t => <TaskRow key={t.id} task={t} />)}</div>
               </details>
             )}
           </CardContent>
         </Card>
 
-        {/* Upcoming 7 Days */}
+        {/* Upcoming */}
         <Card className="w-full lg:col-span-1">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
