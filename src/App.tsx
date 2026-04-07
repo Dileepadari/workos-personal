@@ -54,6 +54,7 @@ function AppWithSearch() {
       <QuickSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Routes>
         <Route path="/auth" element={<Auth />} />
+        <Route path="/collab" element={<CollabView />} />
         <Route path="/collab/:slug" element={<CollabView />} />
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
