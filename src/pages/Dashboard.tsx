@@ -14,19 +14,12 @@ import { format, isToday, isBefore, startOfToday, addDays, isWithinInterval } fr
 import { cn } from '@/lib/utils';
 import { PageHeader } from '@/components/PageHeader';
 
-// DateTime Component
 function DateTime() {
   const [time, setTime] = useState(new Date());
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
+  useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
   const day = time.toLocaleString('en-US', { weekday: 'long' });
   const date = time.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const timeStr = time.toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
-
   return (
     <Card className="bg-gradient-to-r from-primary/10 to-accent/10">
       <CardContent className="p-4 sm:p-6">
@@ -40,31 +33,17 @@ function DateTime() {
   );
 }
 
-interface Task {
-  id: string; title: string; status: string; priority: string;
-  due_date: string | null; due_time: string | null; time_estimate_min: number | null;
-  project_id: string | null;
-}
-interface Project {
-  id: string; name: string; status: string; color: string; slug: string | null;
-}
-interface Milestone {
-  id: string; title: string; date: string; project_id: string; is_completed: boolean;
-}
-interface Meeting {
-  id: string; title: string; scheduled_at: string; project_id: string;
-}
+interface Task { id: string; title: string; status: string; priority: string; due_date: string | null; due_time: string | null; time_estimate_min: number | null; project_id: string | null; }
+interface Project { id: string; name: string; status: string; color: string; slug: string | null; }
+interface Milestone { id: string; title: string; date: string; project_id: string; is_completed: boolean; }
+interface Meeting { id: string; title: string; scheduled_at: string; project_id: string; }
 
 const priorityColors: Record<string, string> = {
-  urgent: 'bg-destructive/20 text-destructive',
-  high: 'bg-warning/20 text-warning',
-  medium: 'bg-primary/20 text-primary',
-  low: 'bg-muted text-muted-foreground',
+  urgent: 'bg-destructive/20 text-destructive', high: 'bg-warning/20 text-warning',
+  medium: 'bg-primary/20 text-primary', low: 'bg-muted text-muted-foreground',
 };
 const projectStatusColors: Record<string, string> = {
-  active: 'bg-success/20 text-success',
-  on_hold: 'bg-warning/20 text-warning',
-  archived: 'bg-muted text-muted-foreground',
+  active: 'bg-success/20 text-success', on_hold: 'bg-warning/20 text-warning', archived: 'bg-muted text-muted-foreground',
 };
 
 export default function Dashboard() {
@@ -110,6 +89,19 @@ export default function Dashboard() {
   const totalEstimateWeek = activeTasks.filter(t => t.due_date && isWithinInterval(new Date(t.due_date), { start: today, end: addDays(today, 7) })).reduce((sum, t) => sum + (t.time_estimate_min ?? 0), 0);
   const availableHours = 7 * 8;
   const workloadWarning = totalEstimateWeek / 60 > availableHours;
+
+  // Combine upcoming events: meetings + milestones + tasks with due dates in next 7 days
+  const upcomingEvents = [
+    ...meetings.map(m => ({ id: m.id, title: m.title, date: new Date(m.scheduled_at), type: 'meeting' as const, projectId: m.project_id })),
+    ...milestones.filter(m => isWithinInterval(new Date(m.date), { start: today, end: addDays(today, 14) })).map(m => ({ id: m.id, title: m.title, date: new Date(m.date), type: 'milestone' as const, projectId: m.project_id })),
+    ...upcomingTasks.slice(0, 5).map(t => ({ id: t.id, title: t.title, date: new Date(t.due_date!), type: 'task' as const, projectId: t.project_id || '' })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 8);
+
+  const eventTypeIcon = (type: string) => {
+    if (type === 'meeting') return <Video className="h-3.5 w-3.5 text-success shrink-0" />;
+    if (type === 'milestone') return <Flag className="h-3.5 w-3.5 text-warning shrink-0" />;
+    return <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" />;
+  };
 
   const handleQuickTask = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,8 +157,6 @@ export default function Dashboard() {
   return (
     <div className="animate-fade-in px-4 py-4 sm:px-6 sm:py-6 space-y-6">
       <PageHeader title="Dashboard" />
-
-      {/* Date/Time Display */}
       <DateTime />
 
       <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -180,7 +170,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Quick Task */}
       <form onSubmit={handleQuickTask} className="flex gap-2">
         <Input value={quickTask} onChange={e => setQuickTask(e.target.value)} placeholder="Quick add a task... press Enter" className="flex-1 h-9 text-sm" />
         <Button type="submit" variant="secondary" size="sm" disabled={!quickTask.trim()}><Plus className="h-4 w-4" /></Button>
@@ -200,9 +189,9 @@ export default function Dashboard() {
         {[
           { label: 'Projects', value: stats.projects, icon: FolderKanban, to: '/projects' },
           { label: 'Open Tasks', value: activeTasks.length, icon: CheckSquare, to: '/tasks' },
-          { label: 'Links', value: stats.links, icon: Link2, to: '/links' },
+          { label: 'Links', value: stats.links, icon: Link2, to: '/resources' },
           { label: 'Notes', value: stats.notes, icon: FileText, to: '/notes' },
-          { label: 'Meetings', value: stats.meetings, icon: Video, to: '/calendar' },
+          { label: 'Events', value: upcomingEvents.length, icon: Calendar, to: '/calendar' },
         ].map(({ label, value, icon: Icon, to }) => (
           <Link key={label} to={to}>
             <Card className="transition-colors hover:bg-muted/50">
@@ -244,22 +233,25 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Upcoming events */}
+        {/* Upcoming events - combined from calendar */}
         <Card>
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-3 sm:mb-4">
-              <Video className="h-4 w-4 text-success" />
+              <Calendar className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-foreground">Upcoming Events</span>
+              <Link to="/calendar" className="ml-auto text-xs text-primary hover:underline">View all</Link>
             </div>
-            {meetings.length === 0 ? (
+            {upcomingEvents.length === 0 ? (
               <p className="text-xs text-muted-foreground py-2">No upcoming events</p>
             ) : (
               <div className="space-y-2">
-                {meetings.slice(0, 4).map(m => (
-                  <div key={m.id} className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground w-16 shrink-0">{format(new Date(m.scheduled_at), 'MMM d')}</span>
-                    <span className="text-foreground flex-1 truncate">{m.title}</span>
-                    <span className="text-muted-foreground">{format(new Date(m.scheduled_at), 'h:mm a')}</span>
+                {upcomingEvents.map(ev => (
+                  <div key={`${ev.type}-${ev.id}`} className="flex items-center gap-2 text-xs">
+                    {eventTypeIcon(ev.type)}
+                    <span className="text-muted-foreground w-14 shrink-0">{isToday(ev.date) ? 'Today' : format(ev.date, 'MMM d')}</span>
+                    <span className="text-foreground flex-1 truncate">{ev.title}</span>
+                    {ev.type === 'meeting' && <span className="text-muted-foreground">{format(ev.date, 'h:mm a')}</span>}
+                    <Badge variant="outline" className="text-[10px] capitalize">{ev.type}</Badge>
                   </div>
                 ))}
               </div>
@@ -268,12 +260,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <div className={`grid grid-cols-1 gap-4 sm:gap-6 ${
-        overdueTasks.length > 0 
-          ? 'lg:grid-cols-3' 
-          : 'lg:grid-cols-2'
-      }`}>
-        {/* Overdue */}
+      <div className={`grid grid-cols-1 gap-4 sm:gap-6 ${overdueTasks.length > 0 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
         {overdueTasks.length > 0 && (
           <Card className="border-destructive/30">
             <CardHeader className="pb-3 sm:pb-4">
@@ -285,8 +272,6 @@ export default function Dashboard() {
             <CardContent className="space-y-1 p-4 sm:p-6">{overdueTasks.map(t => <TaskRow key={t.id} task={t} showSnooze />)}</CardContent>
           </Card>
         )}
-
-        {/* Blocked */}
         {blockedTasks.length > 0 && (
           <Card className="border-warning/30">
             <CardHeader className="pb-3 sm:pb-4">
@@ -298,18 +283,11 @@ export default function Dashboard() {
             <CardContent className="space-y-1 p-4 sm:p-6">{blockedTasks.map(t => <TaskRow key={t.id} task={t} />)}</CardContent>
           </Card>
         )}
-
-        {/* Today */}
-        <Card className={`w-full ${overdueTasks.length > 0 ? 'lg:col-span-1' : 'lg:col-span-1'}`}>
+        <Card>
           <CardHeader className="pb-3 sm:pb-4">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-primary" />Today
               <Badge variant="secondary" className="text-xs">{todayTasks.length}</Badge>
-              {todayTasks.length > 0 && (
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {doneTodayTasks.length}/{todayTasks.length + doneTodayTasks.length} done
-                </span>
-              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 p-4 sm:p-6">
@@ -324,9 +302,7 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-
-        {/* Upcoming */}
-        <Card className={`w-full ${overdueTasks.length > 0 ? 'lg:col-span-1' : 'lg:col-span-1'}`}>
+        <Card>
           <CardHeader className="pb-3 sm:pb-4">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-primary" />Next 7 Days

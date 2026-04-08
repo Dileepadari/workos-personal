@@ -9,12 +9,16 @@ const paletteNames: Record<ColorPalette, string> = {
   github: 'GitHub',
   material: 'Material Design',
   original: 'Original',
+  dracula: 'Dracula',
+  nord: 'Nord',
+  solarized: 'Solarized',
+  catppuccin: 'Catppuccin',
 };
 
 export function ColorThemeSelector() {
   const { colorPalette, setColorPalette } = useColorTheme();
 
-  const palettes: ColorPalette[] = ['common', 'monokai', 'github', 'material', 'original'];
+  const palettes: ColorPalette[] = ['common', 'monokai', 'github', 'material', 'original', 'dracula', 'nord', 'solarized', 'catppuccin'];
 
   return (
     <Card>
