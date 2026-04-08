@@ -37,6 +37,7 @@ interface Task { id: string; title: string; status: string; priority: string; du
 interface Project { id: string; name: string; status: string; color: string; slug: string | null; }
 interface Milestone { id: string; title: string; date: string; project_id: string; is_completed: boolean; }
 interface Meeting { id: string; title: string; scheduled_at: string; project_id: string; }
+interface CalendarEvent { id: string; title: string; scheduled_at: string; project_id: string; location?: string; }
 
 const priorityColors: Record<string, string> = {
   urgent: 'bg-destructive/20 text-destructive', high: 'bg-warning/20 text-warning',
@@ -52,25 +53,28 @@ export default function Dashboard() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [quickTask, setQuickTask] = useState('');
   const [stats, setStats] = useState({ projects: 0, links: 0, notes: 0, meetings: 0 });
 
   const fetchData = async () => {
     if (!user) return;
-    const [tasksRes, projRes, msRes, linksRes, notesRes, eventsRes] = await Promise.all([
+    const [tasksRes, projRes, msRes, linksRes, notesRes, meetingsRes, eventsRes] = await Promise.all([
       supabase.from('tasks').select('id, title, status, priority, due_date, due_time, time_estimate_min, project_id').order('due_date', { ascending: true }),
       supabase.from('projects').select('id, name, status, color, slug').order('updated_at', { ascending: false }),
       supabase.from('milestones').select('*').eq('is_completed', false).order('date', { ascending: true }),
       supabase.from('links').select('id', { count: 'exact', head: true }),
       supabase.from('notes').select('id', { count: 'exact', head: true }),
       supabase.from('meetings').select('id, title, scheduled_at, project_id').gte('scheduled_at', new Date().toISOString()).order('scheduled_at').limit(10),
+      supabase.from('events').select('id, title, scheduled_at, project_id, location').gte('scheduled_at', new Date().toISOString()).order('scheduled_at').limit(10),
     ]);
     setTasks(tasksRes.data ?? []);
     setProjects(projRes.data ?? []);
     setMilestones(msRes.data ?? []);
-    setMeetings(eventsRes.data ?? []);
-    setStats({ projects: projRes.data?.length ?? 0, links: linksRes.count ?? 0, notes: notesRes.count ?? 0, meetings: eventsRes.data?.length ?? 0 });
+    setMeetings(meetingsRes.data ?? []);
+    setCalendarEvents(eventsRes.data ?? []);
+    setStats({ projects: projRes.data?.length ?? 0, links: linksRes.count ?? 0, notes: notesRes.count ?? 0, meetings: (meetingsRes.data?.length ?? 0) + (eventsRes.data?.length ?? 0) });
     setLoading(false);
   };
 
@@ -90,17 +94,15 @@ export default function Dashboard() {
   const availableHours = 7 * 8;
   const workloadWarning = totalEstimateWeek / 60 > availableHours;
 
-  // Combine upcoming events: meetings + milestones + tasks with due dates in next 7 days
+  // Combine upcoming events: only events and meetings
   const upcomingEvents = [
     ...meetings.map(m => ({ id: m.id, title: m.title, date: new Date(m.scheduled_at), type: 'meeting' as const, projectId: m.project_id })),
-    ...milestones.filter(m => isWithinInterval(new Date(m.date), { start: today, end: addDays(today, 14) })).map(m => ({ id: m.id, title: m.title, date: new Date(m.date), type: 'milestone' as const, projectId: m.project_id })),
-    ...upcomingTasks.slice(0, 5).map(t => ({ id: t.id, title: t.title, date: new Date(t.due_date!), type: 'task' as const, projectId: t.project_id || '' })),
+    ...calendarEvents.map(e => ({ id: e.id, title: e.title, date: new Date(e.scheduled_at), type: 'event' as const, projectId: e.project_id })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 8);
 
   const eventTypeIcon = (type: string) => {
     if (type === 'meeting') return <Video className="h-3.5 w-3.5 text-success shrink-0" />;
-    if (type === 'milestone') return <Flag className="h-3.5 w-3.5 text-warning shrink-0" />;
-    return <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" />;
+    return <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />;
   };
 
   const handleQuickTask = async (e: React.FormEvent) => {

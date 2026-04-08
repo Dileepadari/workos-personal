@@ -240,12 +240,12 @@ export default function Resources() {
       <PageHeader title="Resources" />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-xs gap-2">
-          <TabsTrigger value="links" className="gap-2">
+        <TabsList className="flex w-full gap-2">
+          <TabsTrigger value="links" className="gap-2 flex-1">
             <Link2 className="h-4 w-4" />
             Links ({links.length})
           </TabsTrigger>
-          <TabsTrigger value="bookmarks" className="gap-2">
+          <TabsTrigger value="bookmarks" className="gap-2 flex-1">
             <Bookmark className="h-4 w-4" />
             Bookmarks ({bookmarks.length})
           </TabsTrigger>
@@ -388,44 +388,48 @@ export default function Resources() {
             <div className="space-y-2">
               {filteredLinks.map(l => (
                 <Card key={l.id} className="group transition-colors hover:bg-card/80">
-                  <CardContent className="flex items-center gap-4 p-4">
-                    <img
-                      src={`https://www.google.com/s2/favicons?domain=${new URL(l.url).hostname}&sz=32`}
-                      alt=""
-                      className="h-5 w-5 rounded shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleOpenLink(l)}
-                          className="text-sm font-medium text-foreground hover:text-primary truncate"
-                        >
-                          {l.title}
-                        </button>
-                        {l.short_key && (
-                          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                            {l.short_key}
-                          </code>
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-4">
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${new URL(l.url).hostname}&sz=32`}
+                        alt=""
+                        className="h-5 w-5 rounded shrink-0 mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <button
+                            onClick={() => handleOpenLink(l)}
+                            className="text-sm font-medium text-foreground hover:text-primary"
+                          >
+                            {l.title}
+                          </button>
+                          {l.short_key && (
+                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground shrink-0">
+                              {l.short_key}
+                            </code>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate mb-2">{l.url}</p>
+                        {l.tags.length > 0 && (
+                          <div className="flex gap-1 flex-wrap mb-2">
+                            {l.tags.map(tag => (
+                              <Badge key={tag} variant="secondary" className="text-xs">
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">{l.url}</p>
-                      {l.tags.length > 0 && (
-                        <div className="mt-1 flex gap-1 flex-wrap">
-                          {l.tags.map(tag => (
-                            <Badge key={tag} variant="secondary" className="text-xs">
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge
+                          className={`text-xs capitalize ${categoryColors[l.category] || ''}`}
+                        >
+                          {l.category}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">{l.click_count} opens</span>
+                      </div>
                     </div>
-                    <Badge
-                      className={`text-xs capitalize shrink-0 ${categoryColors[l.category] || ''}`}
-                    >
-                      {l.category}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground shrink-0">{l.click_count} opens</span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-3">
                       <Button
                         variant="ghost"
                         size="icon"

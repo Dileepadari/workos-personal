@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ChevronLeft, ChevronRight, CheckSquare, Flag, Calendar as CalIcon, Video, Plus, Pencil, Trash2, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckSquare, Flag, Calendar as CalIcon, Video, Plus, Pencil, Trash2, Clock, Sparkles } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, isToday, addDays } from 'date-fns';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/hooks/use-toast';
@@ -19,7 +19,7 @@ interface CalEvent {
   realId: string;
   title: string;
   date: Date;
-  type: 'task' | 'milestone' | 'meeting';
+  type: 'task' | 'milestone' | 'meeting' | 'event';
   meta?: string;
   rawData?: any;
 }
@@ -37,15 +37,16 @@ export default function CalendarPage() {
   const [addDialog, setAddDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
-  const [eventForm, setEventForm] = useState({ title: '', type: 'task' as string, date: '', time: '', project_id: '', description: '', attendees: '', agenda: '' });
+  const [eventForm, setEventForm] = useState({ title: '', type: 'task' as string, date: '', time: '', project_id: '', description: '', attendees: '', agenda: '', location: '' });
   const [deleteConfirm, setDeleteConfirm] = useState<CalEvent | null>(null);
 
   const loadEvents = async () => {
     if (!user) return;
-    const [tasksRes, msRes, meetRes, projRes] = await Promise.all([
+    const [tasksRes, msRes, meetRes, eventsRes, projRes] = await Promise.all([
       supabase.from('tasks').select('id, title, due_date, due_time, priority, project_id, status, time_estimate_min, description').not('due_date', 'is', null),
       supabase.from('milestones').select('id, title, date, is_completed, project_id'),
       supabase.from('meetings').select('id, title, scheduled_at, attendees, agenda_html, notes_html, action_items, project_id'),
+      supabase.from('events').select('id, title, scheduled_at, description, location, color, project_id'),
       supabase.from('projects').select('id, name'),
     ]);
     setProjects(projRes.data ?? []);
@@ -58,6 +59,9 @@ export default function CalendarPage() {
     });
     (meetRes.data ?? []).forEach(m => {
       items.push({ id: `mt-${m.id}`, realId: m.id, title: m.title, date: new Date(m.scheduled_at), type: 'meeting', rawData: m });
+    });
+    (eventsRes.data ?? []).forEach(e => {
+      items.push({ id: `e-${e.id}`, realId: e.id, title: e.title, date: new Date(e.scheduled_at), type: 'event', rawData: e });
     });
     setEvents(items);
     setLoading(false);
@@ -83,17 +87,19 @@ export default function CalendarPage() {
   const typeIcon = (type: string) => {
     if (type === 'task') return <CheckSquare className="h-3 w-3" />;
     if (type === 'milestone') return <Flag className="h-3 w-3" />;
-    return <Video className="h-3 w-3" />;
+    if (type === 'meeting') return <Video className="h-3 w-3" />;
+    return <Sparkles className="h-3 w-3" />;
   };
   const typeColor = (type: string) => {
     if (type === 'task') return 'text-primary';
     if (type === 'milestone') return 'text-warning';
-    return 'text-success';
+    if (type === 'meeting') return 'text-success';
+    return 'text-accent';
   };
 
   const openAddDialog = (date?: Date) => {
     setEditMode(false);
-    setEventForm({ title: '', type: 'task', date: format(date || new Date(), 'yyyy-MM-dd'), time: '', project_id: '', description: '', attendees: '', agenda: '' });
+    setEventForm({ title: '', type: 'task', date: format(date || new Date(), 'yyyy-MM-dd'), time: '', project_id: '', description: '', attendees: '', agenda: '', location: '' });
     setAddDialog(true);
   };
 
@@ -103,12 +109,13 @@ export default function CalendarPage() {
     setEventForm({
       title: ev.title,
       type: ev.type,
-      date: ev.type === 'meeting' ? format(ev.date, 'yyyy-MM-dd') : (rd.due_date || rd.date || format(ev.date, 'yyyy-MM-dd')),
-      time: ev.type === 'task' ? (rd.due_time || '') : (ev.type === 'meeting' ? format(ev.date, 'HH:mm') : ''),
+      date: ev.type === 'meeting' || ev.type === 'event' ? format(ev.date, 'yyyy-MM-dd') : (rd.due_date || rd.date || format(ev.date, 'yyyy-MM-dd')),
+      time: ev.type === 'task' ? (rd.due_time || '') : (ev.type === 'meeting' || ev.type === 'event' ? format(ev.date, 'HH:mm') : ''),
       project_id: rd.project_id || '',
       description: rd.description || '',
       attendees: rd.attendees || '',
       agenda: rd.agenda_html || '',
+      location: rd.location || '',
     });
     setSelectedEvent(ev);
     setAddDialog(true);
@@ -137,6 +144,14 @@ export default function CalendarPage() {
           attendees: eventForm.attendees || null,
           agenda_html: eventForm.agenda || null,
         }).eq('id', selectedEvent.realId);
+      } else if (selectedEvent.type === 'event') {
+        const scheduledAt = eventForm.time ? `${eventForm.date}T${eventForm.time}` : `${eventForm.date}T09:00`;
+        await supabase.from('events').update({
+          title: eventForm.title, scheduled_at: scheduledAt,
+          description: eventForm.description || null,
+          location: eventForm.location || null,
+          project_id: eventForm.project_id || null,
+        }).eq('id', selectedEvent.realId);
       }
       toast({ title: 'Event updated' });
     } else {
@@ -159,6 +174,15 @@ export default function CalendarPage() {
           title: eventForm.title, scheduled_at: scheduledAt, project_id: eventForm.project_id, user_id: user.id,
           attendees: eventForm.attendees || null, agenda_html: eventForm.agenda || null,
         });
+      } else if (eventForm.type === 'event') {
+        const scheduledAt = eventForm.time ? `${eventForm.date}T${eventForm.time}` : `${eventForm.date}T09:00`;
+        await supabase.from('events').insert({
+          title: eventForm.title, scheduled_at: scheduledAt,
+          description: eventForm.description || null,
+          location: eventForm.location || null,
+          project_id: eventForm.project_id || null,
+          user_id: user.id,
+        });
       }
       toast({ title: 'Event added to calendar' });
     }
@@ -172,6 +196,7 @@ export default function CalendarPage() {
     if (ev.type === 'task') await supabase.from('tasks').delete().eq('id', ev.realId);
     else if (ev.type === 'milestone') await supabase.from('milestones').delete().eq('id', ev.realId);
     else if (ev.type === 'meeting') await supabase.from('meetings').delete().eq('id', ev.realId);
+    else if (ev.type === 'event') await supabase.from('events').delete().eq('id', ev.realId);
     toast({ title: 'Event deleted' });
     setDeleteConfirm(null);
     setSelectedEvent(null);
@@ -296,10 +321,11 @@ export default function CalendarPage() {
       )}
 
       {/* Legend */}
-      <div className="flex gap-4 text-xs text-muted-foreground">
+      <div className="flex gap-4 text-xs text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1"><CheckSquare className="h-3 w-3 text-primary" /> Tasks</span>
         <span className="flex items-center gap-1"><Flag className="h-3 w-3 text-warning" /> Milestones</span>
         <span className="flex items-center gap-1"><Video className="h-3 w-3 text-success" /> Meetings</span>
+        <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-accent" /> Events</span>
       </div>
 
       {/* Event Detail Modal */}
@@ -343,6 +369,14 @@ export default function CalendarPage() {
                   {selectedEvent.rawData.project_id && <div className="flex gap-4"><span className="text-muted-foreground">Project:</span><span>{projectName(selectedEvent.rawData.project_id)}</span></div>}
                 </div>
               )}
+              {selectedEvent.type === 'event' && selectedEvent.rawData && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex gap-4"><span className="text-muted-foreground">Time:</span><span>{format(selectedEvent.date, 'h:mm a')}</span></div>
+                  {selectedEvent.rawData.location && <div className="flex gap-4"><span className="text-muted-foreground">Location:</span><span>{selectedEvent.rawData.location}</span></div>}
+                  {selectedEvent.rawData.description && <div><span className="text-muted-foreground">Description:</span><p className="mt-1 text-xs text-foreground">{selectedEvent.rawData.description}</p></div>}
+                  {selectedEvent.rawData.project_id && <div className="flex gap-4"><span className="text-muted-foreground">Project:</span><span>{projectName(selectedEvent.rawData.project_id)}</span></div>}
+                </div>
+              )}
               <DialogFooter className="gap-2">
                 <Button variant="outline" size="sm" onClick={() => { openEditDialog(selectedEvent); }}>
                   <Pencil className="mr-1 h-3.5 w-3.5" />Edit
@@ -371,6 +405,7 @@ export default function CalendarPage() {
                     <SelectItem value="task">Task</SelectItem>
                     <SelectItem value="milestone">Milestone</SelectItem>
                     <SelectItem value="meeting">Meeting</SelectItem>
+                    <SelectItem value="event">Event</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -395,6 +430,12 @@ export default function CalendarPage() {
               <>
                 <div className="space-y-2"><Label>Attendees</Label><Input value={eventForm.attendees} onChange={e => setEventForm({ ...eventForm, attendees: e.target.value })} placeholder="e.g. John, Jane" /></div>
                 <div className="space-y-2"><Label>Agenda</Label><Textarea value={eventForm.agenda} onChange={e => setEventForm({ ...eventForm, agenda: e.target.value })} rows={2} /></div>
+              </>
+            )}
+            {eventForm.type === 'event' && (
+              <>
+                <div className="space-y-2"><Label>Location</Label><Input value={eventForm.location} onChange={e => setEventForm({ ...eventForm, location: e.target.value })} placeholder="e.g. Conference Room A" /></div>
+                <div className="space-y-2"><Label>Description</Label><Textarea value={eventForm.description} onChange={e => setEventForm({ ...eventForm, description: e.target.value })} rows={2} /></div>
               </>
             )}
             <Button type="submit" className="w-full">{editMode ? 'Save Changes' : 'Add to Calendar'}</Button>
