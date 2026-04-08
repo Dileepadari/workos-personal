@@ -8,6 +8,10 @@ const paletteNames: Record<ColorPalette, string> = {
   github: 'GitHub',
   material: 'Material Design',
   original: 'Original',
+  dracula: 'Dracula',
+  nord: 'Nord',
+  solarized: 'Solarized',
+  catppuccin: 'Catppuccin',
 };
 
 interface ColorSwatchProps {
