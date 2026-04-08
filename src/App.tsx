@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ColorThemeProvider } from "@/contexts/ColorThemeContext";
-import { SearchProvider } from "@/contexts/SearchContext";
+import { SearchProvider, useSearch } from "@/contexts/SearchContext";
 import { AppLayout } from "@/components/AppLayout";
 import { QuickSearch } from "@/components/QuickSearch";
 import Auth from "./pages/Auth";
@@ -36,23 +36,31 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function AppWithSearch() {
-  const [searchOpen, setSearchOpen] = useState(false);
-
+function SearchShortcut() {
+  const { openSearch } = useSearch();
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setSearchOpen(true);
+        openSearch();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [openSearch]);
+  return null;
+}
 
+function SearchDialog() {
+  const { isOpen, closeSearch } = useSearch();
+  return <QuickSearch open={isOpen} onClose={closeSearch} />;
+}
+
+function AppRoutes() {
   return (
-    <SearchProvider initialOpen={searchOpen} onSearchStateChange={setSearchOpen}>
-      <QuickSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+    <>
+      <SearchShortcut />
+      <SearchDialog />
       <Routes>
         <Route path="/auth" element={<Auth />} />
         <Route path="/collab" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
@@ -75,7 +83,7 @@ function AppWithSearch() {
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </SearchProvider>
+    </>
   );
 }
 
@@ -88,7 +96,9 @@ const App = () => (
         <ColorThemeProvider>
           <AuthProvider>
             <BrowserRouter>
-              <AppWithSearch />
+              <SearchProvider>
+                <AppRoutes />
+              </SearchProvider>
             </BrowserRouter>
           </AuthProvider>
         </ColorThemeProvider>
