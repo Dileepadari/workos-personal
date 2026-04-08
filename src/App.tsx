@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ColorThemeProvider } from "@/contexts/ColorThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
 import { AppLayout } from "@/components/AppLayout";
 import { QuickSearch } from "@/components/QuickSearch";
@@ -15,14 +16,14 @@ import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Tasks from "./pages/Tasks";
 import Notes from "./pages/Notes";
-import LinkVault from "./pages/LinkVault";
+import Resources from "./pages/Resources";
 import DailyLog from "./pages/DailyLog";
-import Bookmarks from "./pages/Bookmarks";
 import SettingsPage from "./pages/SettingsPage";
 import CalendarPage from "./pages/CalendarPage";
 import FocusMode from "./pages/FocusMode";
 import WeeklyReview from "./pages/WeeklyReview";
 import TagManager from "./pages/TagManager";
+import CollabMenu from "./pages/CollabMenu";
 import CollabView from "./pages/CollabView";
 import NotFound from "./pages/NotFound";
 
@@ -54,7 +55,9 @@ function AppWithSearch() {
       <QuickSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Routes>
         <Route path="/auth" element={<Auth />} />
-        <Route path="/collab" element={<CollabView />} />
+        <Route path="/collab" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route index element={<CollabMenu />} />
+        </Route>
         <Route path="/collab/:slug" element={<CollabView />} />
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
@@ -62,9 +65,8 @@ function AppWithSearch() {
           <Route path="projects/:id" element={<ProjectDetail />} />
           <Route path="tasks" element={<Tasks />} />
           <Route path="notes" element={<Notes />} />
-          <Route path="links" element={<LinkVault />} />
+          <Route path="resources" element={<Resources />} />
           <Route path="log" element={<DailyLog />} />
-          <Route path="bookmarks" element={<Bookmarks />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="focus" element={<FocusMode />} />
           <Route path="review" element={<WeeklyReview />} />
@@ -83,11 +85,13 @@ const App = () => (
       <Toaster />
       <Sonner />
       <ThemeProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <AppWithSearch />
-          </BrowserRouter>
-        </AuthProvider>
+        <ColorThemeProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <AppWithSearch />
+            </BrowserRouter>
+          </AuthProvider>
+        </ColorThemeProvider>
       </ThemeProvider>
     </TooltipProvider>
   </QueryClientProvider>

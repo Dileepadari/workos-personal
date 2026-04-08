@@ -210,7 +210,7 @@ export default function CalendarPage() {
                       <span className="truncate">{e.title}</span>
                     </button>
                   ))}
-                  {dayEvents.length === 0 && <p className="text-xs text-muted-foreground/50 text-center py-2">—</p>}
+                  {dayEvents.length === 0 && <p className="text-xs text-muted-foreground/50 text-center py-2">-</p>}
                 </CardContent>
               </Card>
             );
