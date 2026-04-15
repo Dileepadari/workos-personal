@@ -79,6 +79,7 @@ export default function Tasks() {
       status: form.status,
       priority: form.priority,
       due_date: form.due_date || null,
+      due_time: form.due_time || null,
       project_id: form.project_id || null,
     };
     if (editingTask) {
@@ -99,6 +100,7 @@ export default function Tasks() {
       status: task.status,
       priority: task.priority,
       due_date: task.due_date ?? '',
+      due_time: task.due_time ?? '',
       project_id: task.project_id ?? '',
     });
     setDialogOpen(true);
