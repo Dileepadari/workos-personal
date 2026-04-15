@@ -238,7 +238,7 @@ export default function Tasks() {
         <p className="text-sm text-muted-foreground">Loading...</p>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {(['todo', 'in_progress', 'done'] as const).map((status) => (
+          {(['todo', 'in_progress', 'done', 'blocked', 'dropped'] as const).map((status) => (
             <Card key={status}>
               <CardHeader className="pb-4 sm:pb-6">
                 <CardTitle className="flex items-center justify-between text-sm font-semibold">
