@@ -272,7 +272,7 @@ export default function Tasks() {
                         {task.due_date && (
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
-                            {format(new Date(task.due_date), 'MMM d')}
+                            {format(new Date(task.due_date), 'MMM d')}{task.due_time ? ` ${task.due_time}` : ''}
                           </span>
                         )}
                       </div>
