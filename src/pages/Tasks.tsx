@@ -143,6 +143,8 @@ export default function Tasks() {
     todo: filteredTasks.filter((t) => t.status === 'todo'),
     in_progress: filteredTasks.filter((t) => t.status === 'in_progress'),
     done: filteredTasks.filter((t) => t.status === 'done'),
+    blocked: filteredTasks.filter((t) => t.status === 'blocked'),
+    dropped: filteredTasks.filter((t) => t.status === 'dropped'),
   };
 
   const projectMap = Object.fromEntries(projects.map((p) => [p.id, p]));
@@ -191,14 +193,20 @@ export default function Tasks() {
                       <SelectItem value="todo">To Do</SelectItem>
                       <SelectItem value="in_progress">In Progress</SelectItem>
                       <SelectItem value="done">Done</SelectItem>
+                      <SelectItem value="blocked">Blocked</SelectItem>
+                      <SelectItem value="dropped">Dropped</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Due Date</Label>
                   <Input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className="h-9 text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Due Time</Label>
+                  <Input type="time" value={form.due_time} onChange={(e) => setForm({ ...form, due_time: e.target.value })} className="h-9 text-sm" />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Project</Label>
@@ -219,7 +227,7 @@ export default function Tasks() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {['all', 'todo', 'in_progress', 'done'].map((s) => (
+        {['all', 'todo', 'in_progress', 'done', 'blocked', 'dropped'].map((s) => (
           <Button key={s} variant={filter === s ? 'default' : 'outline'} size="sm" onClick={() => setFilter(s)} className="text-xs">
             {s === 'all' ? 'All' : statusLabels[s]}
           </Button>
