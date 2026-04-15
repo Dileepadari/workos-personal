@@ -19,9 +19,10 @@ interface Task {
   id: string;
   title: string;
   description: string | null;
-  status: 'todo' | 'in_progress' | 'done';
+  status: 'todo' | 'in_progress' | 'done' | 'blocked' | 'dropped';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   due_date: string | null;
+  due_time: string | null;
   project_id: string | null;
   created_at: string;
 }
@@ -30,10 +31,10 @@ interface Project { id: string; name: string; color: string; }
 
 type TaskForm = {
   title: string; description: string; status: Task['status'];
-  priority: Task['priority']; due_date: string; project_id: string;
+  priority: Task['priority']; due_date: string; due_time: string; project_id: string;
 };
 
-const emptyForm: TaskForm = { title: '', description: '', status: 'todo', priority: 'medium', due_date: '', project_id: '' };
+const emptyForm: TaskForm = { title: '', description: '', status: 'todo', priority: 'medium', due_date: '', due_time: '', project_id: '' };
 
 const priorityColors: Record<string, string> = {
   urgent: 'bg-destructive/20 text-destructive',
@@ -42,7 +43,7 @@ const priorityColors: Record<string, string> = {
   low: 'bg-muted text-muted-foreground',
 };
 
-const statusLabels: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done' };
+const statusLabels: Record<string, string> = { todo: 'To Do', in_progress: 'In Progress', done: 'Done', blocked: 'Blocked', dropped: 'Dropped' };
 
 export default function Tasks() {
   const { user } = useAuth();
