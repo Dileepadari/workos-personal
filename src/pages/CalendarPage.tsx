@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,6 +14,7 @@ import { ChevronLeft, ChevronRight, CheckSquare, Flag, Calendar as CalIcon, Vide
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, addWeeks, subWeeks, isToday, addDays, parseISO } from 'date-fns';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/hooks/use-toast';
+import { getCalendarIntegrations, syncCalendarEvents, parseICS as robustParseICS } from '@/integrations/calendar/sync';
 
 interface CalEvent {
   id: string;
@@ -62,7 +63,7 @@ function generateICS(events: CalEvent[]): string {
   return lines.join('\r\n');
 }
 
-function parseICS(content: string): { title: string; date: string; time: string; description: string; location: string }[] {
+function parseICSForExport(content: string): { title: string; date: string; time: string; description: string; location: string }[] {
   const events: any[] = [];
   const blocks = content.split('BEGIN:VEVENT');
   for (let i = 1; i < blocks.length; i++) {
@@ -126,6 +127,8 @@ export default function CalendarPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const loadingRef = useRef(false); // Prevent concurrent loadEvents calls
+  const lastLoadUserRef = useRef<string | null>(null); // Track last loaded user
   const [current, setCurrent] = useState(new Date());
   const [view, setView] = useState<ViewMode>('month');
   const [events, setEvents] = useState<CalEvent[]>([]);
@@ -139,13 +142,18 @@ export default function CalendarPage() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(localStorage.getItem('workos_last_sync'));
 
-  const loadEvents = async () => {
-    if (!user) return;
-    const [tasksRes, msRes, meetRes, projRes] = await Promise.all([
-      supabase.from('tasks').select('id, title, due_date, due_time, priority, project_id, status, time_estimate_min, description').not('due_date', 'is', null),
-      supabase.from('milestones').select('id, title, date, is_completed, project_id'),
-      supabase.from('meetings').select('id, title, scheduled_at, attendees, agenda_html, notes_html, action_items, project_id'),
-      supabase.from('projects').select('id, name'),
+  const loadEvents = useCallback(async () => {
+    if (!user || loadingRef.current) return; // Skip if already loading
+    
+    loadingRef.current = true;
+    try {
+      const [tasksRes, msRes, meetRes, projRes, syncedRes, eventsRes] = await Promise.all([
+      supabase.from('tasks').select('id, title, due_date, due_time, priority, project_id, status, time_estimate_min, description').eq('user_id', user.id).not('due_date', 'is', null),
+      supabase.from('milestones').select('id, title, date, is_completed, project_id').eq('user_id', user.id),
+      supabase.from('meetings').select('id, title, scheduled_at, attendees, agenda_html, notes_html, action_items, project_id').eq('user_id', user.id),
+      supabase.from('projects').select('id, name').eq('user_id', user.id),
+      supabase.from('synced_events').select('*').eq('user_id', user.id),
+      supabase.from('events').select('id, title, scheduled_at, description, color, project_id').eq('user_id', user.id),
     ]);
     setProjects(projRes.data ?? []);
     const items: CalEvent[] = [];
@@ -161,11 +169,36 @@ export default function CalendarPage() {
     (meetRes.data ?? []).forEach(m => {
       items.push({ id: `mt-${m.id}`, realId: m.id, title: m.title, date: new Date(m.scheduled_at), type: 'meeting', rawData: m });
     });
+    // Add general events
+    (eventsRes.data ?? []).forEach(e => {
+      items.push({ id: `e-${e.id}`, realId: e.id, title: e.title, date: new Date(e.scheduled_at), type: 'event', meta: e.color || '#3b82f6', rawData: e });
+    });
+    // Add synced events from external calendars
+    (syncedRes.data ?? []).forEach((s: any) => {
+      items.push({
+        id: `sync-${s.id}`,
+        realId: s.id,
+        title: s.title,
+        date: new Date(s.start_time),
+        type: 'event',
+        meta: `${s.provider} synced`,
+        rawData: s,
+      });
+    });
     setEvents(items);
     setLoading(false);
-  };
+    } finally {
+      loadingRef.current = false; // Allow next load
+    }
+  }, [user]);
 
-  useEffect(() => { loadEvents(); }, [user]);
+  useEffect(() => {
+    // Only load if user changed to a different user
+    if (user && lastLoadUserRef.current !== user.id) {
+      lastLoadUserRef.current = user.id;
+      loadEvents();
+    }
+  }, [loadEvents, user]);
 
   // Auto-sync on page load if last sync > 24h
   useEffect(() => {
@@ -177,15 +210,41 @@ export default function CalendarPage() {
     }
   }, []);
 
-  const handleSync = async () => {
+  const handleSync = useCallback(async () => {
     setSyncing(true);
-    await loadEvents();
-    const now = new Date().toISOString();
-    localStorage.setItem('workos_last_sync', now);
-    setLastSync(now);
-    setSyncing(false);
-    toast({ title: 'Calendar synced', description: `Last sync: ${format(new Date(), 'h:mm a')}` });
-  };
+    try {
+      // First, sync external calendar integrations
+      if (user?.id) {
+        const integrations = await getCalendarIntegrations(user.id);
+        const enabledIntegrations = integrations.filter((i: any) => i.sync_enabled);
+
+        for (const integration of enabledIntegrations) {
+          try {
+            await syncCalendarEvents(integration.provider, integration.ics_url, user.id);
+          } catch (error) {
+            console.error(`Failed to sync ${integration.provider} calendar:`, error);
+            // Continue with other integrations even if one fails
+          }
+        }
+
+        if (enabledIntegrations.length > 0) {
+          toast({
+            title: 'External calendars synced',
+            description: `Synced ${enabledIntegrations.length} calendar integration(s)`,
+          });
+        }
+      }
+
+      // Then load all events (internal + external)
+      await loadEvents();
+      const now = new Date().toISOString();
+      localStorage.setItem('workos_last_sync', now);
+      setLastSync(now);
+      toast({ title: 'Calendar synced', description: `Last sync: ${format(new Date(), 'h:mm a')}` });
+    } finally {
+      setSyncing(false);
+    }
+  }, [user, toast, loadEvents]);
 
   const navigate = (dir: number) => {
     if (view === 'month') setCurrent(dir > 0 ? addMonths(current, 1) : subMonths(current, 1));
@@ -317,27 +376,114 @@ export default function CalendarPage() {
   // Import ICS file
   const handleImportICS = async (file: File) => {
     if (!user) return;
-    const content = await file.text();
-    const parsed = parseICS(content);
-    if (parsed.length === 0) {
-      toast({ title: 'No events found in file', variant: 'destructive' });
-      return;
-    }
-    let imported = 0;
-    for (const ev of parsed) {
-      const scheduledAt = ev.time ? `${ev.date}T${ev.time}` : `${ev.date}T09:00`;
-      // Import as meetings by default (generic events)
-      await supabase.from('meetings').insert({
-        title: ev.title,
-        scheduled_at: scheduledAt,
-        project_id: projects[0]?.id || null, // default to first project
-        user_id: user.id,
-        agenda_html: ev.description || null,
+    try {
+      const content = await file.text();
+      // Use robust RFC 5545 compliant parser from sync.ts
+      const parsed = robustParseICS(content);
+      if (parsed.length === 0) {
+        toast({ title: 'No events found in file', variant: 'destructive' });
+        return;
+      }
+
+      // Fetch all existing events ONCE upfront (check all event sources)
+      const [tasksRes, meetingsRes, eventsRes] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('title, due_date, due_time')
+          .eq('user_id', user.id)
+          .not('due_date', 'is', null),
+        supabase
+          .from('meetings')
+          .select('title, scheduled_at')
+          .eq('user_id', user.id),
+        supabase
+          .from('events')
+          .select('title, scheduled_at')
+          .eq('user_id', user.id),
+      ]);
+
+      const existingTitles = new Set<string>();
+      
+      // Add existing tasks
+      tasksRes.data?.forEach(t => {
+        const dateStr = t.due_time 
+          ? `${t.due_date}T${t.due_time}`.slice(0, 16)
+          : t.due_date;
+        existingTitles.add(`${t.title.toLowerCase()}|${dateStr}`);
       });
-      imported++;
+
+      // Add existing meetings
+      meetingsRes.data?.forEach(m => {
+        const dateStr = new Date(m.scheduled_at).toISOString().slice(0, 16);
+        existingTitles.add(`${m.title.toLowerCase()}|${dateStr}`);
+      });
+
+      // Add existing events
+      eventsRes.data?.forEach(e => {
+        const dateStr = new Date(e.scheduled_at).toISOString().slice(0, 16);
+        existingTitles.add(`${e.title.toLowerCase()}|${dateStr}`);
+      });
+
+      let imported = 0;
+      let duplicates = 0;
+      const eventsToInsert: any[] = [];
+
+      // Check all events locally against existing events
+      for (const ev of parsed) {
+        const scheduledAt = ev.dtstart.toISOString();
+        const dateStr = scheduledAt.slice(0, 16); // YYYY-MM-DDTHH:mm
+        const key = `${ev.summary.toLowerCase()}|${dateStr}`;
+
+        if (existingTitles.has(key)) {
+          duplicates++;
+          continue;
+        }
+
+        // Collect events to insert into events table
+        eventsToInsert.push({
+          title: ev.summary,
+          scheduled_at: scheduledAt,
+          project_id: projects[0]?.id || null,
+          user_id: user.id,
+          description: ev.description || null,
+          location: ev.location || null,
+          color: '#3b82f6',
+        });
+        
+        // Add to existing titles to prevent duplicates within THIS import
+        existingTitles.add(key);
+      }
+
+      // Insert all new events in one batch
+      if (eventsToInsert.length > 0) {
+        const { error } = await supabase.from('events').insert(eventsToInsert);
+        if (!error) {
+          imported = eventsToInsert.length;
+        } else {
+          console.error('Error importing events:', error);
+          toast({ 
+            title: 'Import failed', 
+            description: error.message,
+            variant: 'destructive'
+          });
+          return;
+        }
+      }
+      
+      const message = duplicates > 0 
+        ? `Imported ${imported} events (${duplicates} duplicates skipped)`
+        : `Imported ${imported} events`;
+      
+      toast({ title: message });
+      await loadEvents();
+    } catch (error) {
+      console.error('Error importing ICS file:', error);
+      toast({ 
+        title: 'Import failed', 
+        description: error instanceof Error ? error.message : 'Unknown error',
+        variant: 'destructive'
+      });
     }
-    toast({ title: `Imported ${imported} events` });
-    await loadEvents();
   };
 
   // Add single event to Google/Outlook
@@ -499,6 +645,7 @@ export default function CalendarPage() {
         <span className="flex items-center gap-1"><CheckSquare className="h-3 w-3 text-primary" /> Tasks</span>
         <span className="flex items-center gap-1"><Flag className="h-3 w-3 text-warning" /> Milestones</span>
         <span className="flex items-center gap-1"><Video className="h-3 w-3 text-success" /> Meetings</span>
+        <span className="flex items-center gap-1"><Sparkles className="h-3 w-3 text-accent" /> Events</span>
       </div>
 
       {/* Event Detail Modal */}
